@@ -61,7 +61,12 @@ Regras:
 - Distratores devem ser plausíveis: mesma classe gramatical, sentido próximo
 - Nunca use a própria palavra na question de "reverse" nem no "quiz_tip"
 - Frases devem ser naturais e diferentes entre si
-- Frases de quiz distintas da example_en`
+- Frases de quiz distintas da example_en
+- quiz_tip deve ser útil para complete_sentence e reverse, mas não revelar a resposta
+- quiz_error_explain deve ter no máximo 2 frases, diretas e didáticas
+- connected_speech.applicable deve ser false se a palavra não apresentar fenômeno claro e didático — não force exemplos artificiais
+- connected_speech.connected_sound_pt deve representar como o som seria percebido pelo ouvido brasileiro, usando recursos do português (ão, ô, ê, dj, tch, u, etc.) — não é transcrição IPA, é aproximação funcional para reconhecimento auditivo
+- quando connected_speech.applicable for false, os demais campos do objeto podem ser omitidos ou enviados como string vazia`
 
 type AIQuizQuestion struct {
 	Question    string   `json:"question"`
@@ -130,7 +135,7 @@ func main() {
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
-			Model: "llama3-70b-8192", // Using Groq's LLaMA 3 70B
+			Model: "llama3-8b-8192", // Using Groq's LLaMA 3 8B
 			Messages: []openai.ChatCompletionMessage{
 				{
 					Role:    openai.ChatMessageRoleSystem,
@@ -162,13 +167,41 @@ func main() {
 		return
 	}
 
-	fmt.Println("✅ Unmarshal successful! Extracted data:")
-	fmt.Printf("- Word: %s (%s)\n", aiResponse.Word, aiResponse.Translation)
-	fmt.Printf("- Phonetic: %s\n", aiResponse.Phonetic)
-	fmt.Printf("- Example: %s -> %s\n", aiResponse.ExampleEN, aiResponse.ExamplePT)
-	fmt.Printf("- Quiz (Multiple Choice Question): %s\n", aiResponse.Quiz.MultipleChoice.Question)
-	
-	if aiResponse.ConnectedSpeech.Applicable {
-		fmt.Printf("- Connected Speech Phenomenon: %s\n", aiResponse.ConnectedSpeech.PhenomenonLabelPT)
+	// Formatação idêntica à documentação (6.4 Mensagem de Retorno ao Usuário)
+	fmt.Printf("\n🔤 %s  %s\n", aiResponse.Word, aiResponse.Phonetic)
+
+	// Format grammar class properly (e.g. noun -> Substantivo)
+	grammarMap := map[string]string{
+		"noun": "Substantivo", "verb": "Verbo", "adjective": "Adjetivo",
+		"adverb": "Advérbio", "conjunction": "Conjunção", "preposition": "Preposição",
 	}
+	grammar := aiResponse.GrammarClass
+	if translated, ok := grammarMap[grammar]; ok {
+		grammar = translated
+	} else {
+		// capitalize first letter
+		if len(grammar) > 0 {
+			grammar = strings.ToUpper(grammar[:1]) + grammar[1:]
+		}
+	}
+	fmt.Printf("📌 %s\n\n", grammar)
+
+	fmt.Printf("🇧🇷 %s\n\n", aiResponse.Translation)
+	fmt.Printf("📖 %s\n\n", aiResponse.DefinitionEN)
+	fmt.Printf("💬 \"%s\"\n", aiResponse.ExampleEN)
+	fmt.Printf("    \"%s\"\n\n", aiResponse.ExamplePT)
+
+	if len(aiResponse.Synonyms) > 0 {
+		fmt.Printf("🔗 Sinônimos: %s\n\n", strings.Join(aiResponse.Synonyms, ", "))
+	}
+
+	if aiResponse.ConnectedSpeech.Applicable {
+		cs := aiResponse.ConnectedSpeech
+		fmt.Printf("🔊 Connected Speech — %s\n", cs.PhenomenonLabelPT)
+		fmt.Printf("Na fala natural: \"%s\"\n", cs.ExamplePhrase)
+		fmt.Printf("🇺🇸 Soa como: %s\n", cs.ConnectedSound)
+		fmt.Printf("🇧🇷 Ouvido brasileiro: %s\n", cs.ConnectedSoundPT)
+		fmt.Printf("💡 %s\n\n", cs.TipPT)
+	}
+
 }
