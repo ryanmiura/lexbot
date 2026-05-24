@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"lexbot/config"
+	"regexp"
+	"strings"
 
 	"github.com/sashabaranov/go-openai"
 )
@@ -60,6 +63,56 @@ Regras:
 - Frases devem ser naturais e diferentes entre si
 - Frases de quiz distintas da example_en`
 
+type AIQuizQuestion struct {
+	Question    string   `json:"question"`
+	Correct     string   `json:"correct"`
+	Distractors []string `json:"distractors,omitempty"`
+}
+
+type AIConnectedSpeech struct {
+	Applicable              bool   `json:"applicable"`
+	Phenomenon              string `json:"phenomenon"` // linking | elision | assimilation | weak_form | intrusion | relaxed
+	PhenomenonLabelPT       string `json:"phenomenon_label_pt"`
+	PhenomenonDescriptionPT string `json:"phenomenon_description_pt"`
+	ExamplePhrase           string `json:"example_phrase"`
+	ExamplePhrasePT         string `json:"example_phrase_pt"`
+	IsolatedSound           string `json:"isolated_sound"`
+	ConnectedSound          string `json:"connected_sound"`
+	ConnectedSoundPT        string `json:"connected_sound_pt"` // aproximação para o ouvido brasileiro
+	TipPT                   string `json:"tip_pt"`
+}
+
+type AIWordResponse struct {
+	Word             string            `json:"word"`
+	Translation      string            `json:"translation"`
+	GrammarClass     string            `json:"grammar_class"`
+	Phonetic         string            `json:"phonetic"`
+	DefinitionEN     string            `json:"definition_en"`
+	ExampleEN        string            `json:"example_en"`
+	ExamplePT        string            `json:"example_pt"`
+	Synonyms         []string          `json:"synonyms"`
+	QuizTip          string            `json:"quiz_tip"`           // dica exibida em complete_sentence e reverse
+	QuizErrorExplain string            `json:"quiz_error_explain"` // explicação exibida no feedback de erro
+	ConnectedSpeech  AIConnectedSpeech `json:"connected_speech"`
+	Quiz             struct {
+		MultipleChoice   AIQuizQuestion `json:"multiple_choice"`
+		CompleteSentence AIQuizQuestion `json:"complete_sentence"`
+		Reverse          AIQuizQuestion `json:"reverse"`
+	} `json:"quiz"`
+}
+
+// cleanJSONMarkdown removes Markdown code block formatting to ensure valid JSON parsing
+func cleanJSONMarkdown(raw string) string {
+	raw = strings.TrimSpace(raw)
+	// Match ```json ... ``` or just ``` ... ```
+	re := regexp.MustCompile("(?s)^```(?:json)?\n?(.*?)\n?```$")
+	match := re.FindStringSubmatch(raw)
+	if len(match) > 1 {
+		return strings.TrimSpace(match[1])
+	}
+	return raw
+}
+
 func main() {
 	cfg := config.Load()
 	if cfg.GroqAPIKey == "" {
@@ -72,7 +125,7 @@ func main() {
 	client := openai.NewClientWithConfig(clientConfig)
 
 	word := "resilient"
-	fmt.Printf("Processing word: %s\n", word)
+	fmt.Printf("Processing word: %s\n\n", word)
 
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
@@ -98,7 +151,24 @@ func main() {
 	}
 
 	rawJSON := resp.Choices[0].Message.Content
-	fmt.Println("--- RAW AI RESPONSE ---")
-	fmt.Println(rawJSON)
-	fmt.Println("-----------------------")
+	cleanJSON := cleanJSONMarkdown(rawJSON)
+
+	var aiResponse AIWordResponse
+	err = json.Unmarshal([]byte(cleanJSON), &aiResponse)
+	if err != nil {
+		fmt.Printf("JSON Unmarshal error: %v\n", err)
+		fmt.Println("--- RAW STRING ---")
+		fmt.Println(rawJSON)
+		return
+	}
+
+	fmt.Println("✅ Unmarshal successful! Extracted data:")
+	fmt.Printf("- Word: %s (%s)\n", aiResponse.Word, aiResponse.Translation)
+	fmt.Printf("- Phonetic: %s\n", aiResponse.Phonetic)
+	fmt.Printf("- Example: %s -> %s\n", aiResponse.ExampleEN, aiResponse.ExamplePT)
+	fmt.Printf("- Quiz (Multiple Choice Question): %s\n", aiResponse.Quiz.MultipleChoice.Question)
+	
+	if aiResponse.ConnectedSpeech.Applicable {
+		fmt.Printf("- Connected Speech Phenomenon: %s\n", aiResponse.ConnectedSpeech.PhenomenonLabelPT)
+	}
 }
