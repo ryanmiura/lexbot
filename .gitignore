@@ -1,3 +1,5 @@
 .env
 docs/*
 
+session.db*
+lexbot_poc
