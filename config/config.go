@@ -8,7 +8,8 @@ import (
 )
 
 type Config struct {
-	DBPath string
+	DBPath     string
+	GroqAPIKey string
 }
 
 func Load() *Config {
@@ -22,7 +23,10 @@ func Load() *Config {
 		dbPath = "session.db"
 	}
 
+	groqAPIKey := os.Getenv("GROQ_API_KEY")
+
 	return &Config{
-		DBPath: dbPath,
+		DBPath:     dbPath,
+		GroqAPIKey: groqAPIKey,
 	}
 }
