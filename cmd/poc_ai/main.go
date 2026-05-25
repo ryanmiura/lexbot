@@ -11,62 +11,100 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
-const systemPrompt = `Você é um assistente especializado em ensino de inglês para brasileiros.
-Retorne APENAS um objeto JSON válido, sem markdown, sem texto antes ou depois.
+const systemPrompt = `Exato — o linking_words[0] e linking_words[1] que usei nas instruções do tip_pt e na verificação do linking induz o modelo a interpretar o campo como array. A correção é remover essa notação e substituir por linguagem descritiva.
+You are an assistant specialized in teaching English to Brazilian Portuguese speakers.
+Return ONLY a valid JSON object, no markdown, no text before or after.
 
-Palavra recebida: "{{WORD}}"
+Word received: "{{WORD}}"
 
-Formato exato:
+Exact format:
 {
-  "word": "a palavra exatamente como recebida",
-  "translation": "tradução principal em português",
+  "word": "the word exactly as received",
+  "translation": "main translation in Brazilian Portuguese",
   "grammar_class": "noun | verb | adjective | adverb | conjunction | preposition | other",
-  "phonetic": "transcrição IPA",
-  "definition_en": "definição curta em inglês, sem usar a própria palavra",
-  "example_en": "frase natural em inglês nível B1-B2",
-  "example_pt": "tradução da frase",
-  "synonyms": ["sinonimo1", "sinonimo2", "sinonimo3"],
-  "quiz_tip": "dica curta que ajuda a lembrar a palavra sem entregá-la diretamente (ex: classe gramatical + pista semântica ou morfológica)",
-  "quiz_error_explain": "explicação curta em português do significado e uso correto da palavra, ideal para quem acabou de errar uma questão. Mencione armadilhas comuns ou confusões com outras palavras se houver.",
+  "phonetic": "IPA transcription",
+  "definition_en": "short definition in English, without using the word itself",
+  "example_en": "natural English sentence at B1-B2 level",
+  "example_pt": "Brazilian Portuguese translation of the sentence",
+  "synonyms": ["synonym1", "synonym2", "synonym3"],
+  "quiz_tip": "short hint in Brazilian Portuguese that helps recall the word without giving it away (e.g. grammar class + semantic or morphological clue)",
+  "quiz_error_explain": "short explanation in Brazilian Portuguese of the word's meaning and correct usage, written for someone who just got it wrong. Mention common traps or confusions with similar words if relevant.",
   "connected_speech": {
-    "applicable": true,
-    "phenomenon": "linking | elision | assimilation | weak_form | intrusion | relaxed",
-    "phenomenon_label_pt": "nome do fenômeno em português (ex: Ligação, Supressão, Forma Fraca)",
-    "phenomenon_description_pt": "explicação curta do fenômeno em português, 1-2 frases",
-    "example_phrase": "frase curta em inglês onde o fenômeno ocorre com a palavra",
-    "example_phrase_pt": "tradução da frase",
-    "isolated_sound": "como a palavra soa isolada, em representação simples",
-    "connected_sound": "como a palavra soa no fluxo da frase, em representação simples",
-    "connected_sound_pt": "como o connected sound seria percebido pelo ouvido de um falante nativo de português brasileiro, usando letras e recursos do português (ex: ão, ô, ê, dj, tch) para aproximar a sonoridade real",
-    "tip_pt": "dica prática para o brasileiro: o que ouvir e o que prestar atenção"
+    "example_phrase": "a complete, natural English sentence containing the word, at least 5 words long, where linking occurs somewhere in the phrase",
+    "example_phrase_pt": "Brazilian Portuguese translation of the phrase",
+    "linking_words": "a single string with the exact two words that link together, separated by a space. Ex: \"turn it\" or \"pick up\". Never return an array.",
+    "connected_sound": "how ONLY the two linking words sound when fused together. Use only plain letters and Portuguese accents, no phonetic symbols. Ex: 'turn it' → 'tôr-nit', 'pick it' → 'pí-kit'",
+    "connected_sound_pt": "how ONLY the two fused linking words would sound to a Brazilian reader. Use ONLY Portuguese letters and accents (á, ê, ô, etc). NO IPA symbols allowed. Ex: 'turn it' → 'tôr-nit', 'not at' → 'nô-tat'",
+    "tip_pt": "explanation in Brazilian Portuguese covering: (1) which final sound of the FIRST linking word merges with which initial sound of the SECOND linking word, (2) other frequent contexts where a Brazilian will hear this same linking pattern"
   },
   "quiz": {
     "multiple_choice": {
-      "question": "frase com a palavra substituída por ___",
-      "correct": "a palavra",
-      "distractors": ["opção errada 1", "opção errada 2", "opção errada 3"]
+      "question": "sentence IN ENGLISH with the word replaced by a single ___",
+      "correct": "the received word — always a SINGLE WORD, never a phrase",
+      "distractors": ["single english word", "single english word", "single english word"]
     },
     "complete_sentence": {
-      "question": "frase diferente com ___ no lugar da palavra",
-      "correct": "a palavra"
+      "question": "different sentence IN ENGLISH with a single ___ in place of the word",
+      "correct": "the received word — always a SINGLE WORD, never a phrase"
     },
     "reverse": {
-      "question": "definição ou descrição para o usuário adivinhar a palavra",
-      "correct": "a palavra"
+      "question": "a clear, direct description in Brazilian Portuguese that leads the user to guess the word. Do not mix context or storytelling into the question — ask directly.",
+      "correct": "the received word, in English"
     }
   }
 }
 
-Regras:
-- Distratores devem ser plausíveis: mesma classe gramatical, sentido próximo
-- Nunca use a própria palavra na question de "reverse" nem no "quiz_tip"
-- Frases devem ser naturais e diferentes entre si
-- Frases de quiz distintas da example_en
-- quiz_tip deve ser útil para complete_sentence e reverse, mas não revelar a resposta
-- quiz_error_explain deve ter no máximo 2 frases, diretas e didáticas
-- connected_speech.applicable deve ser false se a palavra não apresentar fenômeno claro e didático — não force exemplos artificiais
-- connected_speech.connected_sound_pt deve representar como o som seria percebido pelo ouvido brasileiro, usando recursos do português (ão, ô, ê, dj, tch, u, etc.) — não é transcrição IPA, é aproximação funcional para reconhecimento auditivo
-- quando connected_speech.applicable for false, os demais campos do objeto podem ser omitidos ou enviados como string vazia`
+GENERAL RULES:
+- Distractors must be plausible: same grammar class, similar meaning, but wrong in context
+- The registered word NEVER appears as a distractor
+- Never use the word itself in the "reverse" question or in "quiz_tip"
+- Quiz sentences must differ from each other and from example_en
+- quiz_tip must not reveal the answer — only guide toward it
+- quiz_error_explain: maximum 2 sentences, direct and didactic, in Brazilian Portuguese
+- quiz: all questions and distractors in English. Only the "reverse" question must be in Brazilian Portuguese
+- quiz.multiple_choice.correct and quiz.complete_sentence.correct must ALWAYS be a single word — the exact registered word. Never return a phrase, collocation or multiple words in these fields. The ___ gap represents exactly one word.
+- Before finalizing quiz.multiple_choice and quiz.complete_sentence, mentally test: "does [correct] fit as a single word, grammatically and naturally, in place of ___?" — if not, rewrite the sentence
+- For functional words (adverbs, conjunctions, prepositions) like "instead", "although", "rather": build sentences where the word appears at the end of a clause or after the main verb, so it fits naturally as a single word in the gap. Examples for "instead": "She didn't want coffee, so she had tea ___." / "He was tired, so he stayed home ___."
+- All fields inside connected_speech are required. Never omit any of them, especially tip_pt
+
+CONNECTED SPEECH RULES — READ CAREFULLY:
+The only phenomenon trained here is LINKING.
+Linking occurs ONLY when the preceding word ends in a CONSONANT sound and the following word begins with a VOWEL sound. The two sounds merge together.
+
+Before choosing the two linking words, explicitly verify:
+1. What is the FINAL sound of the first word? Is it a consonant sound?
+2. What is the INITIAL sound of the second word? Is it a vowel sound?
+3. Only if BOTH conditions are true, it is valid linking.
+
+CORRECT linking examples:
+- "turn it"    → /n/ final + /ɪ/ initial = consonant + vowel ✓ → "tôr-nit"
+- "pick up"    → /k/ final + /ʌ/ initial = consonant + vowel ✓ → "pí-kap"
+- "an apple"   → /n/ final + /æ/ initial = consonant + vowel ✓ → "a-næpl"
+- "not at all" → /t/ final + /æ/ initial = consonant + vowel ✓ → "nô-ta-tôl"
+- "come over"  → /m/ final + /oʊ/ initial = consonant + vowel ✓ → "câ-môvér"
+- "of him"     → /v/ final + /ɪ/ initial = consonant + vowel ✓ → "ô-vim"
+
+EXAMPLES THAT ARE NOT LINKING — never use these patterns:
+- "go instead" → /oʊ/ final + /ɪ/ initial = vowel + vowel ✗
+- "very easy"  → /i/ final + /i/ initial = vowel + vowel ✗
+- "of my"      → /v/ final + /m/ initial = consonant + consonant ✗
+- "and the"    → /d/ final + /ð/ initial = consonant + consonant ✗
+- "stay in"    → /eɪ/ final + /ɪ/ initial = vowel + vowel ✗
+
+HIERARCHY FOR CHOOSING the two linking words:
+1. Prioritize linking directly involving the registered word
+   (word ends in consonant + next word begins with vowel,
+   or previous word ends in consonant + registered word begins with vowel)
+2. If not possible, build a natural sentence where linking occurs
+   between two other words in the phrase, and indicate which ones in linking_words
+
+RULES FOR connected_sound AND connected_sound_pt:
+- Both fields represent ONLY the two fused linking words — never the full sentence
+- NO IPA symbols allowed in either field: ə ɪ ː ɛ ɾ ʃ ʒ θ ð æ ʌ ɔ ʊ ɑ ŋ
+- Use only plain letters and Portuguese accents
+- The result must be readable by any Brazilian with no knowledge of phonetics
+- tip_pt is mandatory — never omit it
+- tip_pt must be factually correct: only describe the final sound of the first linking word as a consonant if it truly is one — verify before writing`
 
 type AIQuizQuestion struct {
 	Question    string   `json:"question"`
@@ -75,16 +113,12 @@ type AIQuizQuestion struct {
 }
 
 type AIConnectedSpeech struct {
-	Applicable              bool   `json:"applicable"`
-	Phenomenon              string `json:"phenomenon"` // linking | elision | assimilation | weak_form | intrusion | relaxed
-	PhenomenonLabelPT       string `json:"phenomenon_label_pt"`
-	PhenomenonDescriptionPT string `json:"phenomenon_description_pt"`
-	ExamplePhrase           string `json:"example_phrase"`
-	ExamplePhrasePT         string `json:"example_phrase_pt"`
-	IsolatedSound           string `json:"isolated_sound"`
-	ConnectedSound          string `json:"connected_sound"`
-	ConnectedSoundPT        string `json:"connected_sound_pt"` // aproximação para o ouvido brasileiro
-	TipPT                   string `json:"tip_pt"`
+	ExamplePhrase    string `json:"example_phrase"`     // frase com linking, contendo a palavra
+	ExamplePhrasePT  string `json:"example_phrase_pt"`  // tradução da frase
+	LinkingWords     string `json:"linking_words"`      // as duas palavras que se ligam, ex: "turn it"
+	ConnectedSound   string `json:"connected_sound"`    // frase encadeada em representação silábica
+	ConnectedSoundPT string `json:"connected_sound_pt"` // aproximação para o ouvido brasileiro, só letras do português
+	TipPT            string `json:"tip_pt"`             // explicação do linking e onde o brasileiro vai ouvir isso
 }
 
 type AIWordResponse struct {
@@ -129,13 +163,13 @@ func main() {
 	clientConfig.BaseURL = "https://api.groq.com/openai/v1"
 	client := openai.NewClientWithConfig(clientConfig)
 
-	word := "resilient"
+	word := "instead"
 	fmt.Printf("Processing word: %s\n\n", word)
 
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
-			Model: "llama3-8b-8192", // Using Groq's LLaMA 3 8B
+			Model: "llama-3.1-8b-instant",
 			Messages: []openai.ChatCompletionMessage{
 				{
 					Role:    openai.ChatMessageRoleSystem,
@@ -156,6 +190,7 @@ func main() {
 	}
 
 	rawJSON := resp.Choices[0].Message.Content
+	fmt.Println("Raw JSON:", rawJSON)
 	cleanJSON := cleanJSONMarkdown(rawJSON)
 
 	var aiResponse AIWordResponse
@@ -195,13 +230,12 @@ func main() {
 		fmt.Printf("🔗 Sinônimos: %s\n\n", strings.Join(aiResponse.Synonyms, ", "))
 	}
 
-	if aiResponse.ConnectedSpeech.Applicable {
-		cs := aiResponse.ConnectedSpeech
-		fmt.Printf("🔊 Connected Speech — %s\n", cs.PhenomenonLabelPT)
-		fmt.Printf("Na fala natural: \"%s\"\n", cs.ExamplePhrase)
-		fmt.Printf("🇺🇸 Soa como: %s\n", cs.ConnectedSound)
-		fmt.Printf("🇧🇷 Ouvido brasileiro: %s\n", cs.ConnectedSoundPT)
-		fmt.Printf("💡 %s\n\n", cs.TipPT)
-	}
+	cs := aiResponse.ConnectedSpeech
+	fmt.Printf("🔊 Connected Speech \n")
+	fmt.Printf("Na fala natural: \"%s\"\n", cs.ExamplePhrase)
+	fmt.Printf("Palavras linkadas: %s\n", cs.LinkingWords)
+	fmt.Printf("🇺🇸 Soa como: %s\n", cs.ConnectedSound)
+	fmt.Printf("🇧🇷 Ouvido brasileiro: %s\n", cs.ConnectedSoundPT)
+	fmt.Printf("💡 %s\n\n", cs.TipPT)
 
 }
