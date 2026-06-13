@@ -6,7 +6,7 @@ LexBot é um bot de WhatsApp desenvolvido em Go que utiliza Inteligência Artifi
 
 * **Processamento de Vocabulário:** Ao receber uma palavra ou expressão em inglês, o bot consulta uma API de IA e retorna:
   * Tradução principal.
-  * Transcrição fonética (IPA).
+  * Pronúncia aproximada (aportuguesada).
   * Classe gramatical.
   * Frases de exemplo em inglês e português.
 * **Sistema de Quizzes:** Geração de perguntas a partir do vocabulário salvo do próprio usuário. Inclui formatos de múltipla escolha, completar frases e tradução reversa.
