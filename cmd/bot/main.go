@@ -30,7 +30,7 @@ func formatWordCard(w *service.Word) string {
 
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("🔤 %s  %s\n", w.Word, w.Phonetic))
+	sb.WriteString(fmt.Sprintf("🔤 %s - 🔊 %s\n", w.Word, w.Phonetic))
 	sb.WriteString(fmt.Sprintf("📌 %s\n\n", grammar))
 	sb.WriteString(fmt.Sprintf("🇧🇷 %s\n\n", w.Translation))
 	sb.WriteString(fmt.Sprintf("📖 %s\n\n", w.DefinitionEN))

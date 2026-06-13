@@ -23,7 +23,7 @@ Exact format:
   "word": "the word exactly as received",
   "translation": "main translation in Brazilian Portuguese",
   "grammar_class": "noun | verb | adjective | adverb | conjunction | preposition | other",
-  "phonetic": "IPA transcription",
+  "phonetic": "how the word would sound to a Brazilian reader. Use ONLY Portuguese syllables and accents to simulate the English pronunciation. NO IPA symbols allowed. Ex: 'apple' -> 'é-pôl', 'mattress' -> 'mé-três', 'world' -> 'uârld'",
   "definition_en": "short definition in English, without using the word itself",
   "example_en": "natural English sentence at B1-B2 level",
   "example_pt": "Brazilian Portuguese translation of the sentence",
