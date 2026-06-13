@@ -11,7 +11,7 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
-const systemPrompt = `Exato — o linking_words[0] e linking_words[1] que usei nas instruções do tip_pt e na verificação do linking induz o modelo a interpretar o campo como array. A correção é remover essa notação e substituir por linguagem descritiva.
+const systemPrompt = `
 You are an assistant specialized in teaching English to Brazilian Portuguese speakers.
 Return ONLY a valid JSON object, no markdown, no text before or after.
 
