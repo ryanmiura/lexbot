@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"lexbot/internal/service"
 
@@ -160,6 +161,65 @@ func (a *Adapter) FindByUserAndWord(ctx context.Context, userID int64, word stri
 	}
 
 	return &w, nil
+}
+
+// ListByUser implements service.WordRepository. Quiz questions are not
+// loaded here since the list view doesn't need them.
+func (a *Adapter) ListByUser(ctx context.Context, userID int64, filter string) ([]*service.Word, error) {
+	query := `
+		SELECT id, user_id, word, translation, grammar_class, phonetic, definition_en,
+		       example_en, example_pt, synonyms, quiz_tip, quiz_error_explain, connected_speech,
+		       difficulty, times_reviewed, times_correct, last_reviewed_at, created_at
+		FROM words WHERE user_id = ?`
+
+	switch normalizeListFilter(filter) {
+	case "novas":
+		query += " AND difficulty = 'new'"
+	case "dificeis":
+		query += " AND difficulty = 'learning'"
+	}
+	query += " ORDER BY created_at DESC"
+
+	rows, err := a.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list words: %w", err)
+	}
+	defer rows.Close()
+
+	var words []*service.Word
+	for rows.Next() {
+		var w service.Word
+		var synonymsJSON, connectedSpeechJSON string
+		if err := rows.Scan(
+			&w.ID, &w.UserID, &w.Word, &w.Translation, &w.GrammarClass, &w.Phonetic, &w.DefinitionEN,
+			&w.ExampleEN, &w.ExamplePT, &synonymsJSON, &w.QuizTip, &w.QuizErrorExplain, &connectedSpeechJSON,
+			&w.Difficulty, &w.TimesReviewed, &w.TimesCorrect, &w.LastReviewedAt, &w.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan word: %w", err)
+		}
+		if err := json.Unmarshal([]byte(synonymsJSON), &w.Synonyms); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal synonyms: %w", err)
+		}
+		if err := json.Unmarshal([]byte(connectedSpeechJSON), &w.ConnectedSpeech); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal connected_speech: %w", err)
+		}
+		words = append(words, &w)
+	}
+
+	return words, rows.Err()
+}
+
+// normalizeListFilter maps the raw "/lista <filter>" argument (with or
+// without accents) to a canonical filter key.
+func normalizeListFilter(filter string) string {
+	switch strings.ToLower(strings.TrimSpace(filter)) {
+	case "novas", "nova", "new":
+		return "novas"
+	case "dificeis", "difíceis", "dificil", "difícil":
+		return "dificeis"
+	default:
+		return ""
+	}
 }
 
 // loadQuizQuestions fills w.Quiz from the quiz_questions rows belonging to w.

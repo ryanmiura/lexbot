@@ -14,13 +14,15 @@ type Handler struct {
 	messenger service.Messenger
 	users     service.UserRepository
 	words     *WordHandler
+	list      *ListHandler
 }
 
-func NewHandler(messenger service.Messenger, users service.UserRepository, wordService *service.WordService) *Handler {
+func NewHandler(messenger service.Messenger, users service.UserRepository, wordService *service.WordService, wordRepo service.WordRepository) *Handler {
 	return &Handler{
 		messenger: messenger,
 		users:     users,
 		words:     NewWordHandler(messenger, wordService),
+		list:      NewListHandler(messenger, wordRepo),
 	}
 }
 
@@ -57,8 +59,10 @@ func (h *Handler) HandleMessage(ctx context.Context, chat string, phone string, 
 	}
 }
 
-func (h *Handler) handleCommand(_ context.Context, chat string, _ int64, cmd *Command) {
+func (h *Handler) handleCommand(ctx context.Context, chat string, userID int64, cmd *Command) {
 	switch cmd.Name {
+	case "lista":
+		h.list.Handle(ctx, chat, userID, cmd.Args)
 	default:
 		h.messenger.Send(chat, "Comando não implementado ainda.")
 	}

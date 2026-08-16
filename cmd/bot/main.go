@@ -42,7 +42,7 @@ func main() {
 	wordService := service.NewWordService(aiAdapter, dbAdapter)
 
 	// Bot handler: routes incoming messages to the right flow (word or command)
-	handler := bot.NewHandler(waAdapter, dbAdapter, wordService)
+	handler := bot.NewHandler(waAdapter, dbAdapter, wordService, dbAdapter)
 
 	// Bridge whatsmeow events to the handler
 	waAdapter.AddEventHandler(func(evt any) {

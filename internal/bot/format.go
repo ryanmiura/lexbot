@@ -43,3 +43,25 @@ func formatWordCard(w *service.Word) string {
 
 	return sb.String()
 }
+
+var difficultyLabels = map[string]string{
+	"new": "novo", "learning": "aprendendo", "familiar": "familiar", "mastered": "dominado",
+}
+
+func formatWordList(words []*service.Word) string {
+	if len(words) == 0 {
+		return "📋 Você ainda não tem nenhuma palavra salva. Envie uma palavra em inglês para começar!"
+	}
+
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "📋 Suas palavras (%d):\n\n", len(words))
+	for i, w := range words {
+		label := difficultyLabels[w.Difficulty]
+		if label == "" {
+			label = w.Difficulty
+		}
+		fmt.Fprintf(&sb, "%d. %s — %s (%s)\n", i+1, w.Word, w.Translation, label)
+	}
+
+	return sb.String()
+}
