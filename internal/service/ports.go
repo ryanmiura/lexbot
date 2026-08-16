@@ -14,3 +14,15 @@ type Messenger interface {
 type AIProvider interface {
 	ProcessWord(ctx context.Context, word string) (*Word, error)
 }
+
+// UserRepository abstracts access to user data, keyed by WhatsApp phone number.
+type UserRepository interface {
+	Upsert(ctx context.Context, phone string) (*User, error)
+}
+
+// WordRepository abstracts access to word data and its associated quiz questions.
+type WordRepository interface {
+	// Save persists a word and its quiz questions atomically, and sets word.ID.
+	Save(ctx context.Context, word *Word) error
+	FindByUserAndWord(ctx context.Context, userID int64, word string) (*Word, error)
+}

@@ -1,6 +1,25 @@
 package service
 
+import "time"
+
+// User represents a bot user, identified by their WhatsApp phone number.
+type User struct {
+	ID               int64
+	Phone            string
+	QuizHintsEnabled bool
+	CreatedAt        time.Time
+}
+
 type Word struct {
+	// Persistence fields, populated by WordRepository, never set from the AI response.
+	ID             int64      `json:"-"`
+	UserID         int64      `json:"-"`
+	Difficulty     string     `json:"-"`
+	TimesReviewed  int        `json:"-"`
+	TimesCorrect   int        `json:"-"`
+	LastReviewedAt *time.Time `json:"-"`
+	CreatedAt      time.Time  `json:"-"`
+
 	Word             string          `json:"word"`
 	Translation      string          `json:"translation"`
 	GrammarClass     string          `json:"grammar_class"`
