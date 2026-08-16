@@ -10,6 +10,7 @@ import (
 
 	"lexbot/config"
 	"lexbot/internal/adapter/openai"
+	"lexbot/internal/adapter/sqlite"
 	"lexbot/internal/adapter/whatsmeow"
 	"lexbot/internal/service"
 
@@ -66,9 +67,15 @@ func main() {
 		panic(fmt.Errorf("failed to initialize whatsapp adapter: %v", err))
 	}
 
+	// Initialize the SQLite adapter (users, words and quiz_questions)
+	dbAdapter, err := sqlite.NewAdapter(cfg.DBPath)
+	if err != nil {
+		panic(fmt.Errorf("failed to initialize database: %v", err))
+	}
+
 	// Initialize AI adapter and WordService
 	aiAdapter := openai.NewAdapter(cfg.GroqAPIKey, "https://api.groq.com/openai/v1")
-	wordService := service.NewWordService(aiAdapter)
+	wordService := service.NewWordService(aiAdapter, dbAdapter)
 
 	// Define event handler
 	eventHandler := func(evt interface{}) {
@@ -114,7 +121,14 @@ func main() {
 			}
 
 			// Pass background context. In real usage, you might want a timeout.
-			aiWord, err := wordService.ProcessNewWord(context.Background(), msg)
+			user, err := dbAdapter.Upsert(context.Background(), v.Info.Sender.User)
+			if err != nil {
+				fmt.Printf("Error upserting user: %v\n", err)
+				waAdapter.Send(v.Info.Chat.String(), "❌ Ocorreu um erro ao identificar seu usuário. Tente novamente.")
+				return
+			}
+
+			aiWord, alreadyExists, err := wordService.ProcessNewWord(context.Background(), user.ID, msg)
 			if err != nil {
 				fmt.Printf("Error processing word: %v\n", err)
 				waAdapter.Send(v.Info.Chat.String(), "❌ Ocorreu um erro ao processar a palavra. Tente novamente.")
@@ -122,6 +136,9 @@ func main() {
 			}
 
 			responseCard := formatWordCard(aiWord)
+			if alreadyExists {
+				responseCard = "⚠️ Você já tem essa palavra na sua lista!\n\n" + responseCard
+			}
 			err = waAdapter.Send(v.Info.Chat.String(), responseCard)
 			if err != nil {
 				fmt.Printf("Error sending card: %v\n", err)
