@@ -29,6 +29,9 @@ type WordRepository interface {
 	// filter narrows the result: "novas" (difficulty=new), "dificeis" (difficulty=learning),
 	// or "" for no filtering.
 	ListByUser(ctx context.Context, userID int64, filter string) ([]*Word, error)
+	// UpdateAfterQuiz records the outcome of a quiz answer for a word,
+	// bumping times_reviewed/times_correct, last_reviewed_at and difficulty.
+	UpdateAfterQuiz(ctx context.Context, wordID int64, correct bool) error
 }
 
 // QuizRepository abstracts access to quiz session and answer data.

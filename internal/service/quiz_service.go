@@ -47,6 +47,30 @@ func (s *QuizService) SelectWordsForQuiz(ctx context.Context, userID int64, coun
 	return words, nil
 }
 
+// RecordAnswer evaluates the user's answer against the correct one, persists
+// it, and updates the word's review stats and difficulty tier accordingly.
+// It returns whether the answer was accepted as correct.
+func (s *QuizService) RecordAnswer(ctx context.Context, sessionID, wordID int64, questionType, userAnswer, correctAnswer string) (bool, error) {
+	correct := EvaluateAnswer(questionType, userAnswer, correctAnswer)
+
+	if err := s.quiz.SaveAnswer(ctx, &QuizAnswer{
+		SessionID:     sessionID,
+		WordID:        wordID,
+		QuestionType:  questionType,
+		UserAnswer:    userAnswer,
+		CorrectAnswer: correctAnswer,
+		IsCorrect:     correct,
+	}); err != nil {
+		return false, fmt.Errorf("failed to save answer: %w", err)
+	}
+
+	if err := s.words.UpdateAfterQuiz(ctx, wordID, correct); err != nil {
+		return false, fmt.Errorf("failed to update word after quiz: %w", err)
+	}
+
+	return correct, nil
+}
+
 // priorityScore implements the algorithm described in the project docs:
 //
 //	priority_score = (error_weight × 0.6) + (recency_weight × 0.4)

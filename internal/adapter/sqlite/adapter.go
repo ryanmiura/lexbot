@@ -215,6 +215,39 @@ func (a *Adapter) ListByUser(ctx context.Context, userID int64, filter string) (
 	return words, rows.Err()
 }
 
+// UpdateAfterQuiz implements service.WordRepository. It bumps the word's
+// review counters and recomputes its difficulty tier from the resulting
+// success rate, following the thresholds described in the project docs:
+// >=85% (with >=5 reviews) is "mastered", >=60% is "familiar", any review
+// at all is at least "learning".
+func (a *Adapter) UpdateAfterQuiz(ctx context.Context, wordID int64, correct bool) error {
+	correctIncrement := 0
+	if correct {
+		correctIncrement = 1
+	}
+
+	_, err := a.db.ExecContext(ctx, `
+		UPDATE words SET
+			times_reviewed   = times_reviewed + 1,
+			times_correct    = times_correct + ?,
+			last_reviewed_at = CURRENT_TIMESTAMP,
+			difficulty       = CASE
+				WHEN (CAST(times_correct + ? AS FLOAT) / (times_reviewed + 1)) >= 0.85
+				     AND (times_reviewed + 1) >= 5 THEN 'mastered'
+				WHEN (CAST(times_correct + ? AS FLOAT) / (times_reviewed + 1)) >= 0.60
+				     THEN 'familiar'
+				ELSE 'learning'
+			END
+		WHERE id = ?`,
+		correctIncrement, correctIncrement, correctIncrement, wordID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update word after quiz: %w", err)
+	}
+
+	return nil
+}
+
 // normalizeListFilter maps the raw "/lista <filter>" argument (with or
 // without accents) to a canonical filter key.
 func normalizeListFilter(filter string) string {
