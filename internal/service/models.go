@@ -50,7 +50,37 @@ type Quiz struct {
 }
 
 type QuizQuestion struct {
+	// Persistence fields, populated by WordRepository/QuizRepository, never set from the AI response.
+	ID           int64  `json:"-"`
+	WordID       int64  `json:"-"`
+	QuestionType string `json:"-"` // multiple_choice | complete_sentence | reverse
+
 	Question    string   `json:"question"`
 	Correct     string   `json:"correct"`
 	Distractors []string `json:"distractors,omitempty"`
+}
+
+// QuizSession tracks an in-progress or finished quiz run for a user.
+type QuizSession struct {
+	ID             int64
+	UserID         int64
+	Status         string // active | completed | abandoned
+	WordIDs        []int64
+	CurrentIndex   int
+	CorrectCount   int
+	TotalQuestions int
+	StartedAt      time.Time
+	CompletedAt    *time.Time
+}
+
+// QuizAnswer records a single answer given during a quiz session.
+type QuizAnswer struct {
+	ID            int64
+	SessionID     int64
+	WordID        int64
+	QuestionType  string
+	UserAnswer    string
+	CorrectAnswer string
+	IsCorrect     bool
+	AnsweredAt    time.Time
 }

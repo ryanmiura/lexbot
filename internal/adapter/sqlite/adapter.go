@@ -17,9 +17,12 @@ import (
 //go:embed migrations/001_schema.sql
 var schemaSQL string
 
-// Adapter implements the service.UserRepository and service.WordRepository
-// interfaces using SQLite. It shares the same database file used by the
-// whatsmeow session store.
+//go:embed migrations/002_quiz.sql
+var quizSchemaSQL string
+
+// Adapter implements the service.UserRepository, service.WordRepository and
+// service.QuizRepository interfaces using SQLite. It shares the same
+// database file used by the whatsmeow session store.
 type Adapter struct {
 	db *sql.DB
 }
@@ -33,6 +36,9 @@ func NewAdapter(dbPath string) (*Adapter, error) {
 
 	if _, err := db.Exec(schemaSQL); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+	if _, err := db.Exec(quizSchemaSQL); err != nil {
+		return nil, fmt.Errorf("failed to run quiz migrations: %w", err)
 	}
 
 	return &Adapter{db: db}, nil
@@ -156,7 +162,7 @@ func (a *Adapter) FindByUserAndWord(ctx context.Context, userID int64, word stri
 		return nil, fmt.Errorf("failed to unmarshal connected_speech: %w", err)
 	}
 
-	if err := a.loadQuizQuestions(ctx, &w); err != nil {
+	if err := a.fillQuizQuestions(ctx, &w); err != nil {
 		return nil, err
 	}
 
@@ -209,6 +215,39 @@ func (a *Adapter) ListByUser(ctx context.Context, userID int64, filter string) (
 	return words, rows.Err()
 }
 
+// UpdateAfterQuiz implements service.WordRepository. It bumps the word's
+// review counters and recomputes its difficulty tier from the resulting
+// success rate, following the thresholds described in the project docs:
+// >=85% (with >=5 reviews) is "mastered", >=60% is "familiar", any review
+// at all is at least "learning".
+func (a *Adapter) UpdateAfterQuiz(ctx context.Context, wordID int64, correct bool) error {
+	correctIncrement := 0
+	if correct {
+		correctIncrement = 1
+	}
+
+	_, err := a.db.ExecContext(ctx, `
+		UPDATE words SET
+			times_reviewed   = times_reviewed + 1,
+			times_correct    = times_correct + ?,
+			last_reviewed_at = CURRENT_TIMESTAMP,
+			difficulty       = CASE
+				WHEN (CAST(times_correct + ? AS FLOAT) / (times_reviewed + 1)) >= 0.85
+				     AND (times_reviewed + 1) >= 5 THEN 'mastered'
+				WHEN (CAST(times_correct + ? AS FLOAT) / (times_reviewed + 1)) >= 0.60
+				     THEN 'familiar'
+				ELSE 'learning'
+			END
+		WHERE id = ?`,
+		correctIncrement, correctIncrement, correctIncrement, wordID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update word after quiz: %w", err)
+	}
+
+	return nil
+}
+
 // normalizeListFilter maps the raw "/lista <filter>" argument (with or
 // without accents) to a canonical filter key.
 func normalizeListFilter(filter string) string {
@@ -222,38 +261,143 @@ func normalizeListFilter(filter string) string {
 	}
 }
 
-// loadQuizQuestions fills w.Quiz from the quiz_questions rows belonging to w.
-func (a *Adapter) loadQuizQuestions(ctx context.Context, w *service.Word) error {
+// fillQuizQuestions populates w.Quiz from the quiz_questions rows belonging to w.
+func (a *Adapter) fillQuizQuestions(ctx context.Context, w *service.Word) error {
+	questions, err := a.GetQuestionsByWordID(ctx, w.ID)
+	if err != nil {
+		return err
+	}
+
+	for _, q := range questions {
+		switch q.QuestionType {
+		case "multiple_choice":
+			w.Quiz.MultipleChoice = *q
+		case "complete_sentence":
+			w.Quiz.CompleteSentence = *q
+		case "reverse":
+			w.Quiz.Reverse = *q
+		}
+	}
+
+	return nil
+}
+
+// GetQuestionsByWordID implements service.QuizRepository.
+func (a *Adapter) GetQuestionsByWordID(ctx context.Context, wordID int64) ([]*service.QuizQuestion, error) {
 	rows, err := a.db.QueryContext(ctx,
-		`SELECT question_type, question_text, correct_answer, distractors FROM quiz_questions WHERE word_id = ?`,
-		w.ID,
+		`SELECT id, word_id, question_type, question_text, correct_answer, distractors
+		 FROM quiz_questions WHERE word_id = ?`,
+		wordID,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to load quiz questions: %w", err)
+		return nil, fmt.Errorf("failed to load quiz questions: %w", err)
 	}
 	defer rows.Close()
 
+	var questions []*service.QuizQuestion
 	for rows.Next() {
-		var questionType, distractorsJSON string
-		var q service.QuizQuestion
-		if err := rows.Scan(&questionType, &q.Question, &q.Correct, &distractorsJSON); err != nil {
-			return fmt.Errorf("failed to scan quiz question: %w", err)
+		var distractorsJSON string
+		q := &service.QuizQuestion{}
+		if err := rows.Scan(&q.ID, &q.WordID, &q.QuestionType, &q.Question, &q.Correct, &distractorsJSON); err != nil {
+			return nil, fmt.Errorf("failed to scan quiz question: %w", err)
 		}
 		if distractorsJSON != "" {
 			if err := json.Unmarshal([]byte(distractorsJSON), &q.Distractors); err != nil {
-				return fmt.Errorf("failed to unmarshal distractors: %w", err)
+				return nil, fmt.Errorf("failed to unmarshal distractors: %w", err)
 			}
 		}
-
-		switch questionType {
-		case "multiple_choice":
-			w.Quiz.MultipleChoice = q
-		case "complete_sentence":
-			w.Quiz.CompleteSentence = q
-		case "reverse":
-			w.Quiz.Reverse = q
-		}
+		questions = append(questions, q)
 	}
 
-	return rows.Err()
+	return questions, rows.Err()
+}
+
+// SaveSession implements service.QuizRepository. It persists a new quiz
+// session and sets session.ID.
+func (a *Adapter) SaveSession(ctx context.Context, session *service.QuizSession) error {
+	wordIDsJSON, err := json.Marshal(session.WordIDs)
+	if err != nil {
+		return fmt.Errorf("failed to marshal word_ids: %w", err)
+	}
+	if session.Status == "" {
+		session.Status = "active"
+	}
+
+	res, err := a.db.ExecContext(ctx, `
+		INSERT INTO quiz_sessions (user_id, status, word_ids, current_index, correct_count, total_questions)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		session.UserID, session.Status, string(wordIDsJSON), session.CurrentIndex, session.CorrectCount, session.TotalQuestions,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to insert quiz session: %w", err)
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("failed to read inserted quiz session id: %w", err)
+	}
+	session.ID = id
+
+	return nil
+}
+
+// GetActiveSession implements service.QuizRepository. It returns nil, nil
+// when the user has no active session.
+func (a *Adapter) GetActiveSession(ctx context.Context, userID int64) (*service.QuizSession, error) {
+	var s service.QuizSession
+	var wordIDsJSON string
+
+	err := a.db.QueryRowContext(ctx, `
+		SELECT id, user_id, status, word_ids, current_index, correct_count, total_questions, started_at, completed_at
+		FROM quiz_sessions WHERE user_id = ? AND status = 'active'
+		ORDER BY started_at DESC LIMIT 1`,
+		userID,
+	).Scan(&s.ID, &s.UserID, &s.Status, &wordIDsJSON, &s.CurrentIndex, &s.CorrectCount, &s.TotalQuestions, &s.StartedAt, &s.CompletedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active quiz session: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(wordIDsJSON), &s.WordIDs); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal word_ids: %w", err)
+	}
+
+	return &s, nil
+}
+
+// UpdateSession implements service.QuizRepository.
+func (a *Adapter) UpdateSession(ctx context.Context, session *service.QuizSession) error {
+	_, err := a.db.ExecContext(ctx, `
+		UPDATE quiz_sessions
+		SET status = ?, current_index = ?, correct_count = ?, completed_at = ?
+		WHERE id = ?`,
+		session.Status, session.CurrentIndex, session.CorrectCount, session.CompletedAt, session.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update quiz session: %w", err)
+	}
+	return nil
+}
+
+// SaveAnswer implements service.QuizRepository. It persists an answer and
+// sets answer.ID.
+func (a *Adapter) SaveAnswer(ctx context.Context, answer *service.QuizAnswer) error {
+	res, err := a.db.ExecContext(ctx, `
+		INSERT INTO quiz_answers (session_id, word_id, question_type, user_answer, correct_answer, is_correct)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		answer.SessionID, answer.WordID, answer.QuestionType, answer.UserAnswer, answer.CorrectAnswer, answer.IsCorrect,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to insert quiz answer: %w", err)
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("failed to read inserted quiz answer id: %w", err)
+	}
+	answer.ID = id
+
+	return nil
 }
