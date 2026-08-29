@@ -17,9 +17,12 @@ import (
 //go:embed migrations/001_schema.sql
 var schemaSQL string
 
-// Adapter implements the service.UserRepository and service.WordRepository
-// interfaces using SQLite. It shares the same database file used by the
-// whatsmeow session store.
+//go:embed migrations/002_quiz.sql
+var quizSchemaSQL string
+
+// Adapter implements the service.UserRepository, service.WordRepository and
+// service.QuizRepository interfaces using SQLite. It shares the same
+// database file used by the whatsmeow session store.
 type Adapter struct {
 	db *sql.DB
 }
@@ -33,6 +36,9 @@ func NewAdapter(dbPath string) (*Adapter, error) {
 
 	if _, err := db.Exec(schemaSQL); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+	if _, err := db.Exec(quizSchemaSQL); err != nil {
+		return nil, fmt.Errorf("failed to run quiz migrations: %w", err)
 	}
 
 	return &Adapter{db: db}, nil

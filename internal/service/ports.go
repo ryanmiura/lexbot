@@ -30,3 +30,15 @@ type WordRepository interface {
 	// or "" for no filtering.
 	ListByUser(ctx context.Context, userID int64, filter string) ([]*Word, error)
 }
+
+// QuizRepository abstracts access to quiz session and answer data.
+type QuizRepository interface {
+	// SaveSession persists a new quiz session and sets session.ID.
+	SaveSession(ctx context.Context, session *QuizSession) error
+	// GetActiveSession returns the user's active session, or nil if none exists.
+	GetActiveSession(ctx context.Context, userID int64) (*QuizSession, error)
+	UpdateSession(ctx context.Context, session *QuizSession) error
+	SaveAnswer(ctx context.Context, answer *QuizAnswer) error
+	// GetQuestionsByWordID returns the three quiz questions generated for a word.
+	GetQuestionsByWordID(ctx context.Context, wordID int64) ([]*QuizQuestion, error)
+}
