@@ -169,6 +169,44 @@ func (a *Adapter) FindByUserAndWord(ctx context.Context, userID int64, word stri
 	return &w, nil
 }
 
+// FindByID implements service.WordRepository. It returns nil, nil when no
+// word with the given id exists.
+func (a *Adapter) FindByID(ctx context.Context, id int64) (*service.Word, error) {
+	var w service.Word
+	var synonymsJSON, connectedSpeechJSON string
+
+	err := a.db.QueryRowContext(ctx, `
+		SELECT id, user_id, word, translation, grammar_class, phonetic, definition_en,
+		       example_en, example_pt, synonyms, quiz_tip, quiz_error_explain, connected_speech,
+		       difficulty, times_reviewed, times_correct, last_reviewed_at, created_at
+		FROM words WHERE id = ?`,
+		id,
+	).Scan(
+		&w.ID, &w.UserID, &w.Word, &w.Translation, &w.GrammarClass, &w.Phonetic, &w.DefinitionEN,
+		&w.ExampleEN, &w.ExamplePT, &synonymsJSON, &w.QuizTip, &w.QuizErrorExplain, &connectedSpeechJSON,
+		&w.Difficulty, &w.TimesReviewed, &w.TimesCorrect, &w.LastReviewedAt, &w.CreatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to find word by id: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(synonymsJSON), &w.Synonyms); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal synonyms: %w", err)
+	}
+	if err := json.Unmarshal([]byte(connectedSpeechJSON), &w.ConnectedSpeech); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal connected_speech: %w", err)
+	}
+
+	if err := a.fillQuizQuestions(ctx, &w); err != nil {
+		return nil, err
+	}
+
+	return &w, nil
+}
+
 // ListByUser implements service.WordRepository. Quiz questions are not
 // loaded here since the list view doesn't need them.
 func (a *Adapter) ListByUser(ctx context.Context, userID int64, filter string) ([]*service.Word, error) {

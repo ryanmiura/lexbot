@@ -44,6 +44,44 @@ func formatWordCard(w *service.Word) string {
 	return sb.String()
 }
 
+// formatQuizQuestion renders a single quiz round. Formatting is intentionally
+// plain for now; the polished, doc-matching templates land in a follow-up commit.
+func formatQuizQuestion(index, total int, questionType string, q service.QuizQuestion, options []string, showHint bool, hint string) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "❓ Pergunta %d/%d\n\n%s\n", index, total, q.Question)
+
+	if questionType == "multiple_choice" {
+		for i, opt := range options {
+			fmt.Fprintf(&sb, "%d. %s\n", i+1, opt)
+		}
+	} else if showHint && hint != "" {
+		fmt.Fprintf(&sb, "\n💡 Dica: %s\n", hint)
+	}
+
+	return sb.String()
+}
+
+// formatAnswerFeedback renders the correct/incorrect feedback for one answer.
+func formatAnswerFeedback(correct bool, userAnswer string, q *activeQuestion) string {
+	if correct {
+		return "✅ Correto!"
+	}
+	return fmt.Sprintf("❌ Errado. Você respondeu \"%s\", a resposta certa é \"%s\".", userAnswer, q.correctAnswer)
+}
+
+// formatFinalResult renders the end-of-quiz scoreboard.
+func formatFinalResult(session *service.QuizSession, correctWords, incorrectWords []string) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "🏁 Quiz finalizado!\n\nResultado: %d/%d\n", session.CorrectCount, session.TotalQuestions)
+	if len(correctWords) > 0 {
+		fmt.Fprintf(&sb, "\n✅ Acertou: %s\n", strings.Join(correctWords, ", "))
+	}
+	if len(incorrectWords) > 0 {
+		fmt.Fprintf(&sb, "\n⚠️ Errou: %s\n", strings.Join(incorrectWords, ", "))
+	}
+	return sb.String()
+}
+
 var difficultyLabels = map[string]string{
 	"new": "novo", "learning": "aprendendo", "familiar": "familiar", "mastered": "dominado",
 }
