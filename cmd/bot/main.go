@@ -40,9 +40,10 @@ func main() {
 	// Initialize AI adapter and WordService
 	aiAdapter := openai.NewAdapter(cfg.GroqAPIKey, "https://api.groq.com/openai/v1")
 	wordService := service.NewWordService(aiAdapter, dbAdapter)
+	quizService := service.NewQuizService(dbAdapter, dbAdapter)
 
-	// Bot handler: routes incoming messages to the right flow (word or command)
-	handler := bot.NewHandler(waAdapter, dbAdapter, wordService, dbAdapter)
+	// Bot handler: routes incoming messages to the right flow (word, command or quiz answer)
+	handler := bot.NewHandler(waAdapter, dbAdapter, wordService, dbAdapter, dbAdapter, quizService)
 
 	// Bridge whatsmeow events to the handler
 	waAdapter.AddEventHandler(func(evt any) {
