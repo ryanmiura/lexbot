@@ -44,41 +44,94 @@ func formatWordCard(w *service.Word) string {
 	return sb.String()
 }
 
-// formatQuizQuestion renders a single quiz round. Formatting is intentionally
-// plain for now; the polished, doc-matching templates land in a follow-up commit.
+// optionEmoji renders 1-based option numbers as the keycap emoji digits used
+// in the docs' multiple-choice template (1️⃣, 2️⃣, ...), falling back to a
+// plain number for positions beyond what the emoji set covers.
+var optionEmoji = []string{"1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣"}
+
+func optionLabel(i int) string {
+	if i >= 1 && i <= len(optionEmoji) {
+		return optionEmoji[i-1]
+	}
+	return fmt.Sprintf("%d.", i)
+}
+
+// formatQuizQuestion renders a single quiz round, following the per-type
+// templates described in the docs (section 7.4).
 func formatQuizQuestion(index, total int, questionType string, q service.QuizQuestion, options []string, showHint bool, hint string) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "❓ Pergunta %d/%d\n\n%s\n", index, total, q.Question)
+	fmt.Fprintf(&sb, "❓ Pergunta %d/%d\n\n", index, total)
 
-	if questionType == "multiple_choice" {
+	switch questionType {
+	case "multiple_choice":
+		fmt.Fprintf(&sb, "\"%s\"\n\nQual palavra completa a frase?\n\n", q.Question)
 		for i, opt := range options {
-			fmt.Fprintf(&sb, "%d. %s\n", i+1, opt)
+			fmt.Fprintf(&sb, "%s %s\n", optionLabel(i+1), opt)
 		}
-	} else if showHint && hint != "" {
-		fmt.Fprintf(&sb, "\n💡 Dica: %s\n", hint)
+		fmt.Fprintf(&sb, "\nResponda com o número (1-%d):", len(options))
+	case "reverse":
+		fmt.Fprintf(&sb, "Qual palavra em inglês descreve:\n\n\"%s\"\n", q.Question)
+		if showHint && hint != "" {
+			fmt.Fprintf(&sb, "\n💡 Dica: %s\n", hint)
+		}
+		sb.WriteString("\nDigite a palavra em inglês:")
+	default: // complete_sentence
+		fmt.Fprintf(&sb, "Complete a frase com a palavra correta:\n\n\"%s\"\n", q.Question)
+		if showHint && hint != "" {
+			fmt.Fprintf(&sb, "\n💡 Dica: %s\n", hint)
+		}
+		sb.WriteString("\nDigite a palavra:")
 	}
 
 	return sb.String()
 }
 
-// formatAnswerFeedback renders the correct/incorrect feedback for one answer.
-func formatAnswerFeedback(correct bool, userAnswer string, q *activeQuestion) string {
+// formatAnswerFeedback renders the correct/incorrect feedback for one
+// answer, following the docs' template (section 7.5). Feedback is built
+// entirely from data saved at word-registration time — no AI call happens
+// here.
+func formatAnswerFeedback(correct, hasNext bool, userAnswer string, q *activeQuestion) string {
+	var sb strings.Builder
+
 	if correct {
-		return "✅ Correto!"
+		sb.WriteString("✅ Correto!\n")
+	} else {
+		sb.WriteString("❌ Quase lá!\n\n")
+		fmt.Fprintf(&sb, "Você respondeu: \"%s\"\n", userAnswer)
+		fmt.Fprintf(&sb, "Resposta correta: %s\n", q.correctAnswer)
+		if q.quizErrorExplain != "" {
+			fmt.Fprintf(&sb, "\n💡 %s\n", q.quizErrorExplain)
+		}
 	}
-	return fmt.Sprintf("❌ Errado. Você respondeu \"%s\", a resposta certa é \"%s\".", userAnswer, q.correctAnswer)
+
+	if q.exampleEN != "" {
+		fmt.Fprintf(&sb, "\n💬 \"%s\"\n    \"%s\"\n", q.exampleEN, q.examplePT)
+	}
+
+	if hasNext {
+		sb.WriteString("\nPróxima pergunta...")
+	}
+
+	return sb.String()
 }
 
-// formatFinalResult renders the end-of-quiz scoreboard.
+// formatFinalResult renders the end-of-quiz scoreboard (section 7.6). The
+// cross-session comparison and pattern-detection suggestions described in
+// the docs are out of scope here — they'd need historical data and AI
+// analysis beyond what this phase covers.
 func formatFinalResult(session *service.QuizSession, correctWords, incorrectWords []string) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "🏁 Quiz finalizado!\n\nResultado: %d/%d\n", session.CorrectCount, session.TotalQuestions)
+
 	if len(correctWords) > 0 {
-		fmt.Fprintf(&sb, "\n✅ Acertou: %s\n", strings.Join(correctWords, ", "))
+		fmt.Fprintf(&sb, "\n✅ Você domina bem:\n   %s\n", strings.Join(correctWords, ", "))
 	}
 	if len(incorrectWords) > 0 {
-		fmt.Fprintf(&sb, "\n⚠️ Errou: %s\n", strings.Join(incorrectWords, ", "))
+		fmt.Fprintf(&sb, "\n⚠️ Ainda precisa de atenção:\n   %s\n", strings.Join(incorrectWords, ", "))
 	}
+
+	sb.WriteString("\nDigite /quiz para praticar novamente.")
+
 	return sb.String()
 }
 

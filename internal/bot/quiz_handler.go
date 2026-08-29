@@ -25,12 +25,15 @@ var quizQuestionTypes = []string{"multiple_choice", "complete_sentence", "revers
 // exact correct-answer string only matter for the single turn between
 // asking and answering.
 type activeQuestion struct {
-	sessionID     int64
-	wordID        int64
-	word          string
-	questionType  string
-	correctAnswer string
-	options       []string // populated for multiple_choice only
+	sessionID        int64
+	wordID           int64
+	word             string
+	questionType     string
+	correctAnswer    string
+	options          []string // populated for multiple_choice only
+	exampleEN        string   // shown as reinforcement on a correct answer
+	examplePT        string
+	quizErrorExplain string // shown alongside the correct answer on a wrong one
 }
 
 // quizRuntime tracks a single user's in-progress quiz interaction: either
@@ -213,10 +216,11 @@ func (h *QuizHandler) handleAnswer(ctx context.Context, chat string, user *servi
 		rt.incorrectWords = append(rt.incorrectWords, cur.word)
 	}
 	rt.session.CurrentIndex++
+	hasNext := rt.session.CurrentIndex < rt.session.TotalQuestions
 
-	h.sendAnswerFeedback(chat, cur, userAnswer, correct)
+	h.sendAnswerFeedback(chat, cur, userAnswer, correct, hasNext)
 
-	if rt.session.CurrentIndex >= rt.session.TotalQuestions {
+	if !hasNext {
 		now := time.Now()
 		rt.session.Status = "completed"
 		rt.session.CompletedAt = &now
@@ -256,14 +260,15 @@ func (h *QuizHandler) askQuestion(ctx context.Context, chat string, user *servic
 	rt.current = &activeQuestion{
 		sessionID: rt.session.ID, wordID: wordID, word: word.Word,
 		questionType: questionType, correctAnswer: q.Correct, options: options,
+		exampleEN: word.ExampleEN, examplePT: word.ExamplePT, quizErrorExplain: word.QuizErrorExplain,
 	}
 
 	showHint := user.QuizHintsEnabled && questionType != "multiple_choice"
 	h.messenger.Send(chat, formatQuizQuestion(index+1, rt.session.TotalQuestions, questionType, q, options, showHint, word.QuizTip))
 }
 
-func (h *QuizHandler) sendAnswerFeedback(chat string, cur *activeQuestion, userAnswer string, correct bool) {
-	h.messenger.Send(chat, formatAnswerFeedback(correct, userAnswer, cur))
+func (h *QuizHandler) sendAnswerFeedback(chat string, cur *activeQuestion, userAnswer string, correct, hasNext bool) {
+	h.messenger.Send(chat, formatAnswerFeedback(correct, hasNext, userAnswer, cur))
 }
 
 func (h *QuizHandler) sendFinalResult(chat string, rt *quizRuntime) {
