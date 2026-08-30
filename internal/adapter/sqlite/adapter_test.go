@@ -36,6 +36,32 @@ func newTestWord(t *testing.T, adapter *sqlite.Adapter, userID int64, word strin
 	return w
 }
 
+func TestFindByID(t *testing.T) {
+	ctx := context.Background()
+	adapter := newTestAdapter(t)
+	user, err := adapter.Upsert(ctx, "5511999999999")
+	if err != nil {
+		t.Fatalf("failed to upsert user: %v", err)
+	}
+	w := newTestWord(t, adapter, user.ID, "turn")
+
+	got, err := adapter.FindByID(ctx, w.ID)
+	if err != nil {
+		t.Fatalf("FindByID failed: %v", err)
+	}
+	if got == nil || got.Word != "turn" || got.Quiz.MultipleChoice.Correct != "turn" {
+		t.Fatalf("unexpected word: %+v", got)
+	}
+
+	missing, err := adapter.FindByID(ctx, w.ID+999)
+	if err != nil {
+		t.Fatalf("FindByID for missing id failed: %v", err)
+	}
+	if missing != nil {
+		t.Fatalf("expected nil for missing id, got %+v", missing)
+	}
+}
+
 func TestUpdateAfterQuizDifficultyTransitions(t *testing.T) {
 	ctx := context.Background()
 	adapter := newTestAdapter(t)

@@ -18,6 +18,14 @@ func (f *fakeWordRepository) Save(ctx context.Context, word *Word) error { retur
 func (f *fakeWordRepository) FindByUserAndWord(ctx context.Context, userID int64, word string) (*Word, error) {
 	return nil, nil
 }
+func (f *fakeWordRepository) FindByID(ctx context.Context, id int64) (*Word, error) {
+	for _, w := range f.words {
+		if w.ID == id {
+			return w, nil
+		}
+	}
+	return nil, nil
+}
 func (f *fakeWordRepository) ListByUser(ctx context.Context, userID int64, filter string) ([]*Word, error) {
 	return f.words, nil
 }
