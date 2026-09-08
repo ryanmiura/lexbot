@@ -1,0 +1,6 @@
+.git
+.env
+session.db*
+docs/
+*.md
+lexbot_poc

@@ -1,0 +1,11 @@
+services:
+  lexbot:
+    image: ghcr.io/ryanmiura/lexbot:latest
+    container_name: lexbot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DB_PATH=/app/data/session.db
+    volumes:
+      - ./lexbot-data:/app/data
