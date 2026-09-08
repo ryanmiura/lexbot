@@ -8,6 +8,7 @@ on:
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
+  DEPLOY_PATH: /opt/pantech/projetos/lexbot
 
 jobs:
   ci:
@@ -82,12 +83,12 @@ jobs:
       - name: Ensure remote directories
         run: |
           ssh -i ~/.ssh/deploy_key "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            "mkdir -p ~/lexbot/lexbot-data"
+            "mkdir -p ${{ env.DEPLOY_PATH }}/lexbot-data"
 
       - name: Upload docker-compose.yml
         run: |
           scp -i ~/.ssh/deploy_key docker-compose.yml \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:~/lexbot/docker-compose.yml"
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ env.DEPLOY_PATH }}/docker-compose.yml"
 
       - name: Pull image and restart service
         env:
@@ -97,7 +98,7 @@ jobs:
           echo "$GHCR_TOKEN" | ssh -i ~/.ssh/deploy_key "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" "
             set -e &&
             docker login ghcr.io -u '$GHCR_ACTOR' --password-stdin &&
-            cd ~/lexbot &&
+            cd '${{ env.DEPLOY_PATH }}' &&
             docker compose pull &&
             docker compose up -d &&
             docker image prune -f
