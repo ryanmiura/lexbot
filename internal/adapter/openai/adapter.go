@@ -139,7 +139,7 @@ func (a *Adapter) ProcessWord(ctx context.Context, word string) (*service.Word, 
 	resp, err := a.client.CreateChatCompletion(
 		ctx,
 		openai.ChatCompletionRequest{
-			Model: "llama-3.1-8b-instant", // specific to Groq, if you want it configurable, pass it as well
+			Model: "openai/gpt-oss-20b", // specific to Groq, if you want it configurable, pass it as well
 			Messages: []openai.ChatCompletionMessage{
 				{
 					Role:    openai.ChatMessageRoleSystem,
