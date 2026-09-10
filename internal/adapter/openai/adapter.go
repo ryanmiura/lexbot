@@ -151,6 +151,14 @@ func (a *Adapter) ProcessWord(ctx context.Context, word string) (*service.Word, 
 				},
 			},
 			Temperature: 0.2, // Low temperature for more deterministic JSON
+			// gpt-oss is a reasoning model: reasoning tokens are drawn from the same
+			// budget as the final answer. Without these, it can burn the whole budget
+			// thinking and return an empty Content (json.Unmarshal fails on "").
+			ReasoningEffort:     "low",
+			MaxCompletionTokens: 2000,
+			ResponseFormat: &openai.ChatCompletionResponseFormat{
+				Type: openai.ChatCompletionResponseFormatTypeJSONObject,
+			},
 		},
 	)
 

@@ -180,7 +180,12 @@ func main() {
 					Content: word,
 				},
 			},
-			Temperature: 0.2, // Low temperature for more deterministic JSON
+			Temperature:         0.2, // Low temperature for more deterministic JSON
+			ReasoningEffort:     "low",
+			MaxCompletionTokens: 2000,
+			ResponseFormat: &openai.ChatCompletionResponseFormat{
+				Type: openai.ChatCompletionResponseFormatTypeJSONObject,
+			},
 		},
 	)
 
