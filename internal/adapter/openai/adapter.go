@@ -18,8 +18,18 @@ Return ONLY a valid JSON object, no markdown, no text before or after.
 
 Word received: "{{WORD}}"
 
+WORD RECOGNITION — DECIDE THIS FIRST:
+Before filling any other field, decide whether the received input is a genuine English word or short fixed expression (e.g. phrasal verb, idiom, collocation) that is teachable as a vocabulary flashcard.
+Set "recognized" to false — and leave every other field empty ("" for strings, [] for arrays, and empty strings for every nested field) — when the input is any of:
+- not English (e.g. Portuguese or any other language)
+- a greeting, interjection, or generic chat message ("oi", "hello", "ok", "obrigado", "thanks")
+- a full sentence, question, or paragraph rather than a single word/short expression
+- gibberish, random characters, or otherwise not a real, teachable word
+Only set "recognized" to true when the input is a genuine English word or short expression suitable for a vocabulary flashcard. When true, fill in every field normally per the rules below.
+
 Exact format:
 {
+  "recognized": true,
   "word": "the word exactly as received",
   "translation": "main translation in Brazilian Portuguese",
   "grammar_class": "noun | verb | adjective | adverb | conjunction | preposition | other",
@@ -173,11 +183,18 @@ func (a *Adapter) ProcessWord(ctx context.Context, word string) (*service.Word, 
 	rawJSON := resp.Choices[0].Message.Content
 	cleanJSON := cleanJSONMarkdown(rawJSON)
 
-	var aiResponse service.Word
+	var aiResponse struct {
+		Recognized bool `json:"recognized"`
+		service.Word
+	}
 	err = json.Unmarshal([]byte(cleanJSON), &aiResponse)
 	if err != nil {
 		return nil, fmt.Errorf("JSON Unmarshal error: %w\nRAW: %s", err, rawJSON)
 	}
 
-	return &aiResponse, nil
+	if !aiResponse.Recognized {
+		return nil, service.ErrWordNotRecognized
+	}
+
+	return &aiResponse.Word, nil
 }

@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -53,6 +54,13 @@ func (h *WordHandler) handleOne(ctx context.Context, chat string, userID int64, 
 	aiWord, alreadyExists, err := h.wordService.ProcessNewWord(ctx, userID, word)
 	if err != nil {
 		fmt.Printf("Error processing word %q: %v\n", word, err)
+		if errors.Is(err, service.ErrWordNotRecognized) {
+			h.messenger.Send(chat, fmt.Sprintf(
+				"🤔 Não consegui reconhecer \"%s\" como uma palavra ou expressão em inglês para ensinar. Tente enviar uma palavra em inglês (ex: \"resilient\").",
+				word,
+			))
+			return
+		}
 		h.messenger.Send(chat, fmt.Sprintf("❌ Ocorreu um erro ao processar \"%s\". Tente novamente.", word))
 		return
 	}
