@@ -21,10 +21,19 @@ services:
     volumes:
       - ./lexbot-data:/app/data
     ports:
-      # Loopback only — same convention as the other proxied services on
-      # this VPS (see docs/deploy-lp.md): NPM reverse-proxies from the
-      # public domain to 127.0.0.1:8081, TLS terminated at NPM. This must
-      # be reachable by anyone with a valid magic link, not just devices on
-      # the Tailscale network — unlike sqlite-web/Dozzle, which are
-      # owner-only tools bound to the Tailscale IP instead.
+      # Loopback-only host binding, kept for local debugging
+      # (curl http://127.0.0.1:8081 from the VPS itself). NPM does NOT use
+      # this — NPM runs as its own container on its own bridge network
+      # (gestao_default), so "127.0.0.1" from inside NPM's container is
+      # NPM's own loopback, not the host's. NPM reaches this service via
+      # the shared gestao_default network below instead, targeting it by
+      # container name (http://lexbot-api:8081), same as any other
+      # container-to-container proxy target in Docker Compose.
       - "127.0.0.1:8081:8081"
+    networks:
+      - default
+      - gestao_default
+
+networks:
+  gestao_default:
+    external: true
