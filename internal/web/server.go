@@ -66,7 +66,7 @@ func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
 	whatsappURL := ""
 	if s.whatsappPhone != "" {
 		whatsappURL = "https://wa.me/" + s.whatsappPhone +
-			"?text=" + url.QueryEscape("Olá! Quero começar a usar o LexBot 👋")
+			"?text=" + url.QueryEscape("Olá! Quero começar a usar o LexBot.")
 	}
 	s.render(w, "landing.html", landingPageData{WhatsAppURL: whatsappURL})
 }
