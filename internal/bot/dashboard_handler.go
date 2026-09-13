@@ -44,7 +44,7 @@ func (h *DashboardHandler) Handle(ctx context.Context, chat string, userID int64
 		return
 	}
 
-	link := fmt.Sprintf("%s/d/%s", h.baseURL, token)
+	link := fmt.Sprintf("%s/dashboard/%s", h.baseURL, token)
 	msg := fmt.Sprintf(
 		"🔗 Acesse seu dashboard (link válido por %d minutos, uso único):\n%s",
 		int(dashboardTokenTTL.Minutes()), link,
