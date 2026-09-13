@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"lexbot/internal/service"
 
@@ -286,6 +287,64 @@ func (a *Adapter) UpdateAfterQuiz(ctx context.Context, wordID int64, correct boo
 	return nil
 }
 
+// GetStats implements service.WordRepository. It aggregates the user's word
+// counts by difficulty and review totals for the /status command.
+func (a *Adapter) GetStats(ctx context.Context, userID int64) (*service.WordStats, error) {
+	var s service.WordStats
+	var lastAddedAt sql.NullString
+	err := a.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*),
+			COALESCE(SUM(CASE WHEN difficulty = 'new' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN difficulty = 'learning' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN difficulty = 'familiar' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN difficulty = 'mastered' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(times_reviewed), 0),
+			COALESCE(SUM(times_correct), 0),
+			MAX(created_at)
+		FROM words WHERE user_id = ?`,
+		userID,
+	).Scan(
+		&s.Total, &s.New, &s.Learning, &s.Familiar, &s.Mastered,
+		&s.TimesReviewed, &s.TimesCorrect, &lastAddedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get word stats: %w", err)
+	}
+
+	s.LastAddedAt, err = parseNullableSQLiteTime(lastAddedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse last added at: %w", err)
+	}
+	return &s, nil
+}
+
+// sqliteTimeLayouts covers the datetime string formats this codebase can
+// produce: CURRENT_TIMESTAMP's default ("2006-01-02 15:04:05", used for
+// created_at) and the driver's own format for a bound time.Time value
+// ("...999999999-07:00", used for completed_at, set from Go).
+var sqliteTimeLayouts = []string{
+	"2006-01-02 15:04:05.999999999-07:00",
+	"2006-01-02 15:04:05",
+}
+
+// parseNullableSQLiteTime parses a datetime value returned by an aggregate
+// SQL function (e.g. MAX(created_at)). The sqlite3 driver only
+// auto-converts bare DATETIME columns to time.Time based on their declared
+// column type — an aggregate's result loses that type info and comes back
+// as a plain string, so it needs parsing by hand here.
+func parseNullableSQLiteTime(s sql.NullString) (*time.Time, error) {
+	if !s.Valid {
+		return nil, nil
+	}
+	for _, layout := range sqliteTimeLayouts {
+		if t, err := time.Parse(layout, s.String); err == nil {
+			return &t, nil
+		}
+	}
+	return nil, fmt.Errorf("unrecognized datetime format: %q", s.String)
+}
+
 // normalizeListFilter maps the raw "/lista <filter>" argument (with or
 // without accents) to a canonical filter key.
 func normalizeListFilter(filter string) string {
@@ -438,4 +497,25 @@ func (a *Adapter) SaveAnswer(ctx context.Context, answer *service.QuizAnswer) er
 	answer.ID = id
 
 	return nil
+}
+
+// GetCompletedStats implements service.QuizRepository. It reports how many
+// quiz sessions the user has completed and when the most recent one
+// finished, used by the /status command.
+func (a *Adapter) GetCompletedStats(ctx context.Context, userID int64) (count int, lastCompletedAt *time.Time, err error) {
+	var lastCompletedAtStr sql.NullString
+	err = a.db.QueryRowContext(ctx, `
+		SELECT COUNT(*), MAX(completed_at)
+		FROM quiz_sessions WHERE user_id = ? AND status = 'completed'`,
+		userID,
+	).Scan(&count, &lastCompletedAtStr)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to get quiz stats: %w", err)
+	}
+
+	lastCompletedAt, err = parseNullableSQLiteTime(lastCompletedAtStr)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to parse last completed at: %w", err)
+	}
+	return count, lastCompletedAt, nil
 }

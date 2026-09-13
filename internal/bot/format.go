@@ -3,6 +3,7 @@ package bot
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"lexbot/internal/service"
 )
@@ -152,6 +153,35 @@ func formatWordList(words []*service.Word) string {
 			label = w.Difficulty
 		}
 		fmt.Fprintf(&sb, "%d. %s — %s (%s)\n", i+1, w.Word, w.Translation, label)
+	}
+
+	return sb.String()
+}
+
+// formatStatus renders the /status snapshot: word counts by difficulty,
+// quizzes completed and overall accuracy. Lines with no data yet (accuracy
+// with zero reviews, dates with no activity) are omitted rather than shown
+// as zero/empty.
+func formatStatus(w *service.WordStats, quizzesCompleted int, lastQuizAt *time.Time) string {
+	var sb strings.Builder
+	sb.WriteString("📊 Seu progresso\n\n")
+	fmt.Fprintf(&sb, "📚 Palavras: %d (%d novas, %d aprendendo, %d familiares, %d dominadas)\n",
+		w.Total, w.New, w.Learning, w.Familiar, w.Mastered)
+	fmt.Fprintf(&sb, "🎯 Quizzes completados: %d\n", quizzesCompleted)
+
+	if w.TimesReviewed > 0 {
+		accuracy := float64(w.TimesCorrect) / float64(w.TimesReviewed) * 100
+		fmt.Fprintf(&sb, "✅ Taxa de acerto: %.0f%%\n", accuracy)
+	}
+
+	if w.LastAddedAt != nil || lastQuizAt != nil {
+		sb.WriteString("\n")
+	}
+	if w.LastAddedAt != nil {
+		fmt.Fprintf(&sb, "🕐 Última palavra cadastrada: %s\n", w.LastAddedAt.Format("02/01/2006"))
+	}
+	if lastQuizAt != nil {
+		fmt.Fprintf(&sb, "🕐 Último quiz: %s\n", lastQuizAt.Format("02/01/2006"))
 	}
 
 	return sb.String()

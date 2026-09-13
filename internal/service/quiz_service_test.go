@@ -36,6 +36,9 @@ func (f *fakeWordRepository) UpdateAfterQuiz(ctx context.Context, wordID int64, 
 	}{wordID, correct})
 	return nil
 }
+func (f *fakeWordRepository) GetStats(ctx context.Context, userID int64) (*WordStats, error) {
+	return &WordStats{}, nil
+}
 
 type fakeQuizRepository struct {
 	savedAnswers []*QuizAnswer
@@ -54,6 +57,9 @@ func (f *fakeQuizRepository) SaveAnswer(ctx context.Context, answer *QuizAnswer)
 }
 func (f *fakeQuizRepository) GetQuestionsByWordID(ctx context.Context, wordID int64) ([]*QuizQuestion, error) {
 	return nil, nil
+}
+func (f *fakeQuizRepository) GetCompletedStats(ctx context.Context, userID int64) (int, *time.Time, error) {
+	return 0, nil, nil
 }
 
 func daysAgo(d int) *time.Time {

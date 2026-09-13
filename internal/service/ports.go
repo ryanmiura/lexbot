@@ -1,6 +1,9 @@
 package service
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Messenger abstracts sending messages to the end user,
 // allowing integration with WhatsApp, Telegram, etc.
@@ -35,6 +38,9 @@ type WordRepository interface {
 	// UpdateAfterQuiz records the outcome of a quiz answer for a word,
 	// bumping times_reviewed/times_correct, last_reviewed_at and difficulty.
 	UpdateAfterQuiz(ctx context.Context, wordID int64, correct bool) error
+	// GetStats returns aggregated word counts (by difficulty) and review
+	// totals for the user, used by the /status command.
+	GetStats(ctx context.Context, userID int64) (*WordStats, error)
 }
 
 // QuizRepository abstracts access to quiz session and answer data.
@@ -47,4 +53,8 @@ type QuizRepository interface {
 	SaveAnswer(ctx context.Context, answer *QuizAnswer) error
 	// GetQuestionsByWordID returns the three quiz questions generated for a word.
 	GetQuestionsByWordID(ctx context.Context, wordID int64) ([]*QuizQuestion, error)
+	// GetCompletedStats returns how many quiz sessions the user has
+	// completed and when the most recent one finished, used by /status.
+	// lastCompletedAt is nil if the user has never completed a quiz.
+	GetCompletedStats(ctx context.Context, userID int64) (count int, lastCompletedAt *time.Time, err error)
 }

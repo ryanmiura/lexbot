@@ -84,3 +84,16 @@ type QuizAnswer struct {
 	IsCorrect     bool
 	AnsweredAt    time.Time
 }
+
+// WordStats aggregates a user's word counts and review totals, used by the
+// /status command.
+type WordStats struct {
+	Total         int
+	New           int
+	Learning      int
+	Familiar      int
+	Mastered      int
+	TimesReviewed int
+	TimesCorrect  int
+	LastAddedAt   *time.Time
+}
