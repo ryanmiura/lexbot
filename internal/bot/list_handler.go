@@ -2,7 +2,7 @@ package bot
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 
 	"lexbot/internal/service"
 )
@@ -22,12 +22,14 @@ func NewListHandler(messenger service.Messenger, wordRepo service.WordRepository
 func (h *ListHandler) Handle(ctx context.Context, chat string, userID int64, filter string) {
 	words, err := h.wordRepo.ListByUser(ctx, userID, filter)
 	if err != nil {
-		fmt.Printf("Error listing words: %v\n", err)
+		slog.Error("failed to list words", "user_id", userID, "filter", filter, "error", err)
 		h.messenger.Send(chat, "❌ Ocorreu um erro ao buscar sua lista. Tente novamente.")
 		return
 	}
 
+	slog.Info("word list requested", "user_id", userID, "filter", filter, "count", len(words))
+
 	if err := h.messenger.Send(chat, formatWordList(words)); err != nil {
-		fmt.Printf("Error sending word list: %v\n", err)
+		slog.Error("failed to send word list", "user_id", userID, "error", err)
 	}
 }

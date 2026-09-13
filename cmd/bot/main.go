@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -18,11 +19,15 @@ import (
 )
 
 func main() {
+	// JSON to stdout so `docker logs` produces one structured line per event,
+	// filterable with jq (e.g. `docker logs lexbot | jq 'select(.level=="ERROR")'`).
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)).With("service", "lexbot"))
+
 	// Load configuration
 	cfg := config.Load()
 
 	if cfg.GroqAPIKey == "" {
-		fmt.Println("Warning: GROQ_API_KEY is not set. AI features will not work.")
+		slog.Warn("GROQ_API_KEY is not set, AI features will not work")
 	}
 
 	// Initialize whatsmeow adapter

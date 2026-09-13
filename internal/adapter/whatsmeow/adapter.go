@@ -3,6 +3,7 @@ package whatsmeow
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -51,11 +52,12 @@ func (a *Adapter) Connect() error {
 		}
 		for evt := range qrChan {
 			if evt.Event == "code" {
-				// Print QR Code in terminal
+				// Print QR Code in terminal (raw stdout, not a log line — it must
+				// stay human-scannable ASCII art, not JSON).
 				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
-				fmt.Println("Please scan the QR Code above using WhatsApp.")
+				slog.Info("QR code generated, waiting for scan")
 			} else {
-				fmt.Println("QR Code event:", evt.Event)
+				slog.Info("QR code event", "event", evt.Event)
 			}
 		}
 	} else {
@@ -64,7 +66,7 @@ func (a *Adapter) Connect() error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("Already logged in! Connected to WhatsApp.")
+		slog.Info("already logged in, connected to WhatsApp")
 	}
 	return nil
 }

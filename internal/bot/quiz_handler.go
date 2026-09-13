@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -89,7 +90,7 @@ func (h *QuizHandler) Start(ctx context.Context, chat string, user *service.User
 
 	active, err := h.quizRepo.GetActiveSession(ctx, user.ID)
 	if err != nil {
-		fmt.Printf("Error checking active quiz session: %v\n", err)
+		slog.Error("failed to check active quiz session", "user_id", user.ID, "error", err)
 		h.messenger.Send(chat, "❌ Ocorreu um erro ao verificar seu quiz. Tente novamente.")
 		return
 	}
@@ -103,7 +104,7 @@ func (h *QuizHandler) Start(ctx context.Context, chat string, user *service.User
 
 	available, err := h.quizSvc.SelectWordsForQuiz(ctx, user.ID, 0)
 	if err != nil {
-		fmt.Printf("Error selecting quiz words: %v\n", err)
+		slog.Error("failed to select quiz words", "user_id", user.ID, "error", err)
 		h.messenger.Send(chat, "❌ Ocorreu um erro ao preparar o quiz. Tente novamente.")
 		return
 	}
@@ -139,7 +140,7 @@ func (h *QuizHandler) HandleActiveInput(ctx context.Context, chat string, user *
 
 	session, err := h.quizRepo.GetActiveSession(ctx, user.ID)
 	if err != nil {
-		fmt.Printf("Error checking active quiz session: %v\n", err)
+		slog.Error("failed to check active quiz session", "user_id", user.ID, "error", err)
 		return false
 	}
 	if session == nil {
@@ -172,7 +173,7 @@ func (h *QuizHandler) handleConfigReply(ctx context.Context, chat string, user *
 
 	session := &service.QuizSession{UserID: user.ID, WordIDs: wordIDs, TotalQuestions: n}
 	if err := h.quizRepo.SaveSession(ctx, session); err != nil {
-		fmt.Printf("Error saving quiz session: %v\n", err)
+		slog.Error("failed to save quiz session", "user_id", user.ID, "error", err)
 		h.messenger.Send(chat, "❌ Ocorreu um erro ao iniciar o quiz. Tente novamente.")
 		h.clearRuntime(user.ID)
 		return
@@ -181,6 +182,7 @@ func (h *QuizHandler) handleConfigReply(ctx context.Context, chat string, user *
 	rt.pendingConfig = false
 	rt.available = nil
 	rt.session = session
+	slog.Info("quiz started", "user_id", user.ID, "session_id", session.ID, "rounds", n)
 	h.messenger.Send(chat, fmt.Sprintf("🎯 Vamos lá! %d perguntas.", n))
 	h.askQuestion(ctx, chat, user, rt, 0)
 }
@@ -204,7 +206,9 @@ func (h *QuizHandler) handleAnswer(ctx context.Context, chat string, user *servi
 
 	correct, err := h.quizSvc.RecordAnswer(ctx, cur.sessionID, cur.wordID, cur.questionType, userAnswer, cur.correctAnswer)
 	if err != nil {
-		fmt.Printf("Error recording quiz answer: %v\n", err)
+		slog.Error("failed to record quiz answer",
+			"user_id", user.ID, "session_id", cur.sessionID, "word_id", cur.wordID, "error", err,
+		)
 		h.messenger.Send(chat, "❌ Ocorreu um erro ao registrar sua resposta. Tente novamente.")
 		return
 	}
@@ -225,15 +229,19 @@ func (h *QuizHandler) handleAnswer(ctx context.Context, chat string, user *servi
 		rt.session.Status = "completed"
 		rt.session.CompletedAt = &now
 		if err := h.quizRepo.UpdateSession(ctx, rt.session); err != nil {
-			fmt.Printf("Error completing quiz session: %v\n", err)
+			slog.Error("failed to complete quiz session", "session_id", rt.session.ID, "error", err)
 		}
+		slog.Info("quiz completed",
+			"user_id", user.ID, "session_id", rt.session.ID,
+			"correct_count", rt.session.CorrectCount, "total_questions", rt.session.TotalQuestions,
+		)
 		h.sendFinalResult(chat, rt)
 		h.clearRuntime(user.ID)
 		return
 	}
 
 	if err := h.quizRepo.UpdateSession(ctx, rt.session); err != nil {
-		fmt.Printf("Error updating quiz session: %v\n", err)
+		slog.Error("failed to update quiz session", "session_id", rt.session.ID, "error", err)
 	}
 	h.askQuestion(ctx, chat, user, rt, rt.session.CurrentIndex)
 }
@@ -242,7 +250,7 @@ func (h *QuizHandler) askQuestion(ctx context.Context, chat string, user *servic
 	wordID := rt.session.WordIDs[index]
 	word, err := h.words.FindByID(ctx, wordID)
 	if err != nil || word == nil {
-		fmt.Printf("Error loading quiz word id=%d: %v\n", wordID, err)
+		slog.Error("failed to load quiz word", "word_id", wordID, "error", err)
 		h.messenger.Send(chat, "❌ Ocorreu um erro ao carregar a próxima pergunta. Tente novamente com /quiz.")
 		h.clearRuntime(user.ID)
 		return

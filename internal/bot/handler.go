@@ -2,7 +2,7 @@ package bot
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"strings"
 
 	"lexbot/internal/service"
@@ -36,18 +36,18 @@ func (h *Handler) HandleMessage(ctx context.Context, chat string, phone string, 
 		return
 	}
 
-	fmt.Printf("Message received from %s: %s\n", phone, msg)
+	slog.Info("message received", "phone", phone, "message", msg)
 
 	if strings.EqualFold(msg, "ping") {
 		if err := h.messenger.Send(chat, "pong"); err != nil {
-			fmt.Printf("Error sending message: %v\n", err)
+			slog.Error("failed to send message", "phone", phone, "error", err)
 		}
 		return
 	}
 
 	user, err := h.users.Upsert(ctx, phone)
 	if err != nil {
-		fmt.Printf("Error upserting user: %v\n", err)
+		slog.Error("failed to upsert user", "phone", phone, "error", err)
 		h.messenger.Send(chat, "❌ Ocorreu um erro ao identificar seu usuário. Tente novamente.")
 		return
 	}
