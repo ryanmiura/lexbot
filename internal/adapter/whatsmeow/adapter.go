@@ -92,3 +92,24 @@ func (a *Adapter) Send(to string, message string) error {
 	_, err = a.client.SendMessage(context.Background(), jid, msgResponse)
 	return err
 }
+
+// ResolveSenderPhone returns the real phone number of whoever sent a message,
+// even when WhatsApp addressed it by LID (Linked ID) — a privacy-preserving
+// synthetic identifier that replaces the phone number in Info.Sender for some
+// messages. For direct messages, whatsmeow already resolves the
+// phone-number counterpart into Info.SenderAlt whenever Sender is a LID (see
+// parseMessageSource in the whatsmeow library); this just picks the right
+// field, so callers never persist or log a LID as if it were the phone
+// number.
+func ResolveSenderPhone(info types.MessageInfo) string {
+	if info.Sender.Server != types.HiddenUserServer {
+		return info.Sender.User
+	}
+	if !info.SenderAlt.IsEmpty() {
+		return info.SenderAlt.User
+	}
+	slog.Warn("message sender is a LID with no phone-number counterpart available, falling back to LID",
+		"lid", info.Sender.User,
+	)
+	return info.Sender.User
+}
