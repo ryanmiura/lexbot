@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"lexbot/internal/service"
@@ -22,22 +23,24 @@ var templates = template.Must(template.ParseFS(templateFS, "templates/*.html"))
 // repositories the WhatsApp bot uses, so both surfaces stay consistent
 // automatically.
 type Server struct {
-	mux      *http.ServeMux
-	sessions *SessionManager
-	tokens   service.DashboardTokenRepository
-	words    service.WordRepository
-	quiz     service.QuizRepository
-	users    service.UserRepository
+	mux           *http.ServeMux
+	sessions      *SessionManager
+	tokens        service.DashboardTokenRepository
+	words         service.WordRepository
+	quiz          service.QuizRepository
+	users         service.UserRepository
+	whatsappPhone string // digits only, e.g. "5543936180556"; "" disables the landing page's CTA
 }
 
-func NewServer(sessions *SessionManager, tokens service.DashboardTokenRepository, words service.WordRepository, quiz service.QuizRepository, users service.UserRepository) *Server {
+func NewServer(sessions *SessionManager, tokens service.DashboardTokenRepository, words service.WordRepository, quiz service.QuizRepository, users service.UserRepository, whatsappPhone string) *Server {
 	s := &Server{
-		mux:      http.NewServeMux(),
-		sessions: sessions,
-		tokens:   tokens,
-		words:    words,
-		quiz:     quiz,
-		users:    users,
+		mux:           http.NewServeMux(),
+		sessions:      sessions,
+		tokens:        tokens,
+		words:         words,
+		quiz:          quiz,
+		users:         users,
+		whatsappPhone: whatsappPhone,
 	}
 	s.routes()
 	return s
@@ -48,11 +51,28 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) routes() {
-	s.mux.HandleFunc("GET /d/{token}", s.handleMagicLink)
+	s.mux.HandleFunc("GET /{$}", s.handleLanding)
+	s.mux.HandleFunc("GET /dashboard/{token}", s.handleMagicLink)
 	s.mux.HandleFunc("GET /dashboard", s.handleDashboard)
 	s.mux.HandleFunc("POST /dashboard/words/{id}/delete", s.handleDeleteWord)
 	s.mux.HandleFunc("POST /dashboard/preferences", s.handlePreferences)
 	s.mux.HandleFunc("GET /logout", s.handleLogout)
+}
+
+// handleLanding renders the public landing page at the site root, with a
+// CTA that opens a WhatsApp chat with the bot (wa.me link — no WhatsApp
+// Business API needed, it's just a deep link).
+func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
+	whatsappURL := ""
+	if s.whatsappPhone != "" {
+		whatsappURL = "https://wa.me/" + s.whatsappPhone +
+			"?text=" + url.QueryEscape("Olá! Quero começar a usar o LexBot 👋")
+	}
+	s.render(w, "landing.html", landingPageData{WhatsAppURL: whatsappURL})
+}
+
+type landingPageData struct {
+	WhatsAppURL string // "" if WHATSAPP_PHONE isn't configured — template hides the CTA then
 }
 
 // handleMagicLink consumes a one-time token and, if valid, starts a

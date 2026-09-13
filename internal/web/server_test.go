@@ -23,7 +23,7 @@ func newTestServer(t *testing.T) (*web.Server, *sqlite.Adapter, *web.SessionMana
 		t.Fatalf("failed to create test adapter: %v", err)
 	}
 	sessions := web.NewSessionManager("test-secret")
-	srv := web.NewServer(sessions, adapter, adapter, adapter, adapter)
+	srv := web.NewServer(sessions, adapter, adapter, adapter, adapter, "5543936180556")
 	return srv, adapter, sessions
 }
 
@@ -83,7 +83,7 @@ func TestMagicLinkFlow(t *testing.T) {
 	}
 
 	// First hit: consume the token, expect a redirect + a session cookie.
-	req := httptest.NewRequest(http.MethodGet, "/d/"+token, nil)
+	req := httptest.NewRequest(http.MethodGet, "/dashboard/"+token, nil)
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 
@@ -113,7 +113,7 @@ func TestMagicLinkFlow(t *testing.T) {
 	}
 
 	// Replaying the same magic link must fail — it's single-use.
-	req3 := httptest.NewRequest(http.MethodGet, "/d/"+token, nil)
+	req3 := httptest.NewRequest(http.MethodGet, "/dashboard/"+token, nil)
 	rec3 := httptest.NewRecorder()
 	srv.ServeHTTP(rec3, req3)
 	if rec3.Code != http.StatusOK || strings.Contains(rec3.Body.String(), "resilient") {
@@ -124,7 +124,7 @@ func TestMagicLinkFlow(t *testing.T) {
 func TestMagicLinkInvalidToken(t *testing.T) {
 	srv, _, _ := newTestServer(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/d/this-token-does-not-exist", nil)
+	req := httptest.NewRequest(http.MethodGet, "/dashboard/this-token-does-not-exist", nil)
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 
@@ -230,4 +230,40 @@ func TestLogoutClearsSession(t *testing.T) {
 	if len(cookies) != 1 || cookies[0].MaxAge >= 0 {
 		t.Fatalf("expected logout to clear the session cookie, got cookies=%+v", cookies)
 	}
+}
+
+func TestLandingPage(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	t.Run("with WHATSAPP_PHONE configured", func(t *testing.T) {
+		srv, _, _ := newTestServer(t) // configured with "5543936180556"
+		rec := httptest.NewRecorder()
+		srv.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("got status %d, want 200", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "https://wa.me/5543936180556") {
+			t.Errorf("expected the CTA to link to wa.me with the configured number, got: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("without WHATSAPP_PHONE configured", func(t *testing.T) {
+		dbPath := filepath.Join(t.TempDir(), "test.db")
+		adapter, err := sqlite.NewAdapter(dbPath)
+		if err != nil {
+			t.Fatalf("failed to create test adapter: %v", err)
+		}
+		srv := web.NewServer(web.NewSessionManager("test-secret"), adapter, adapter, adapter, adapter, "")
+
+		rec := httptest.NewRecorder()
+		srv.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("got status %d, want 200", rec.Code)
+		}
+		if strings.Contains(rec.Body.String(), "wa.me") {
+			t.Errorf("expected no wa.me CTA when WHATSAPP_PHONE isn't configured, got: %s", rec.Body.String())
+		}
+	})
 }

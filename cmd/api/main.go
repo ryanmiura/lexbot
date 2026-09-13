@@ -25,6 +25,9 @@ func main() {
 	if cfg.DashboardSecret == "" {
 		panic("DASHBOARD_SECRET must be set — it signs every session cookie")
 	}
+	if cfg.WhatsAppPhone == "" {
+		slog.Warn("WHATSAPP_PHONE is not set, the landing page's CTA button will be hidden")
+	}
 
 	dbAdapter, err := sqlite.NewAdapter(cfg.DBPath)
 	if err != nil {
@@ -32,7 +35,7 @@ func main() {
 	}
 
 	sessions := web.NewSessionManager(cfg.DashboardSecret)
-	server := web.NewServer(sessions, dbAdapter, dbAdapter, dbAdapter, dbAdapter)
+	server := web.NewServer(sessions, dbAdapter, dbAdapter, dbAdapter, dbAdapter, cfg.WhatsAppPhone)
 
 	slog.Info("dashboard listening", "port", cfg.Port)
 	if err := http.ListenAndServe(cfg.Port, server); err != nil {
