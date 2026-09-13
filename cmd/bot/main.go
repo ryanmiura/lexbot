@@ -29,6 +29,9 @@ func main() {
 	if cfg.GroqAPIKey == "" {
 		slog.Warn("GROQ_API_KEY is not set, AI features will not work")
 	}
+	if cfg.DashboardBaseURL == "" {
+		slog.Warn("DASHBOARD_BASE_URL is not set, /dashboard will not work")
+	}
 
 	// Initialize whatsmeow adapter
 	waAdapter, err := whatsmeow.NewAdapter(cfg.DBPath)
@@ -48,7 +51,7 @@ func main() {
 	quizService := service.NewQuizService(dbAdapter, dbAdapter)
 
 	// Bot handler: routes incoming messages to the right flow (word, command or quiz answer)
-	handler := bot.NewHandler(waAdapter, dbAdapter, wordService, dbAdapter, dbAdapter, quizService)
+	handler := bot.NewHandler(waAdapter, dbAdapter, wordService, dbAdapter, dbAdapter, quizService, dbAdapter, cfg.DashboardBaseURL)
 
 	// Bridge whatsmeow events to the handler
 	waAdapter.AddEventHandler(func(evt any) {

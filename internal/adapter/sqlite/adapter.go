@@ -2,8 +2,10 @@ package sqlite
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +22,9 @@ var schemaSQL string
 
 //go:embed migrations/002_quiz.sql
 var quizSchemaSQL string
+
+//go:embed migrations/003_dashboard.sql
+var dashboardSchemaSQL string
 
 // Adapter implements the service.UserRepository, service.WordRepository and
 // service.QuizRepository interfaces using SQLite. It shares the same
@@ -40,6 +45,9 @@ func NewAdapter(dbPath string) (*Adapter, error) {
 	}
 	if _, err := db.Exec(quizSchemaSQL); err != nil {
 		return nil, fmt.Errorf("failed to run quiz migrations: %w", err)
+	}
+	if _, err := db.Exec(dashboardSchemaSQL); err != nil {
+		return nil, fmt.Errorf("failed to run dashboard migrations: %w", err)
 	}
 
 	return &Adapter{db: db}, nil
@@ -65,6 +73,35 @@ func (a *Adapter) Upsert(ctx context.Context, phone string) (*service.User, erro
 	u.QuizHintsEnabled = hintsEnabled != 0
 
 	return &u, nil
+}
+
+// FindUserByID implements service.UserRepository. It returns nil, nil when
+// no user with the given id exists.
+func (a *Adapter) FindUserByID(ctx context.Context, userID int64) (*service.User, error) {
+	var u service.User
+	var hintsEnabled int
+	err := a.db.QueryRowContext(ctx,
+		`SELECT id, phone, quiz_hints_enabled, created_at FROM users WHERE id = ?`, userID,
+	).Scan(&u.ID, &u.Phone, &hintsEnabled, &u.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to find user by id: %w", err)
+	}
+	u.QuizHintsEnabled = hintsEnabled != 0
+	return &u, nil
+}
+
+// UpdatePreferences implements service.UserRepository.
+func (a *Adapter) UpdatePreferences(ctx context.Context, userID int64, quizHintsEnabled bool) error {
+	_, err := a.db.ExecContext(ctx,
+		`UPDATE users SET quiz_hints_enabled = ? WHERE id = ?`, quizHintsEnabled, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update user preferences: %w", err)
+	}
+	return nil
 }
 
 // Save implements service.WordRepository. It persists the word and its three
@@ -223,7 +260,7 @@ func (a *Adapter) ListByUser(ctx context.Context, userID int64, filter string) (
 	case "dificeis":
 		query += " AND difficulty = 'learning'"
 	}
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY created_at DESC, id DESC"
 
 	rows, err := a.db.QueryContext(ctx, query, userID)
 	if err != nil {
@@ -231,6 +268,33 @@ func (a *Adapter) ListByUser(ctx context.Context, userID int64, filter string) (
 	}
 	defer rows.Close()
 
+	return scanWords(rows)
+}
+
+// SearchByUser implements service.WordRepository. It matches query against
+// both word and translation, case-insensitively; an empty query returns all
+// of the user's words, most recently added first.
+func (a *Adapter) SearchByUser(ctx context.Context, userID int64, query string) ([]*service.Word, error) {
+	rows, err := a.db.QueryContext(ctx, `
+		SELECT id, user_id, word, translation, grammar_class, phonetic, definition_en,
+		       example_en, example_pt, synonyms, quiz_tip, quiz_error_explain, connected_speech,
+		       difficulty, times_reviewed, times_correct, last_reviewed_at, created_at
+		FROM words
+		WHERE user_id = ? AND (word LIKE '%' || ? || '%' OR translation LIKE '%' || ? || '%')
+		ORDER BY created_at DESC, id DESC`,
+		userID, query, query,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search words: %w", err)
+	}
+	defer rows.Close()
+
+	return scanWords(rows)
+}
+
+// scanWords reads every remaining row from rows into []*service.Word,
+// following the shared column order used by ListByUser and SearchByUser.
+func scanWords(rows *sql.Rows) ([]*service.Word, error) {
 	var words []*service.Word
 	for rows.Next() {
 		var w service.Word
@@ -252,6 +316,46 @@ func (a *Adapter) ListByUser(ctx context.Context, userID int64, filter string) (
 	}
 
 	return words, rows.Err()
+}
+
+// Delete implements service.WordRepository. Scoping the DELETE by userID
+// (not just wordID) is what prevents a user from deleting someone else's
+// word even if they guess or tamper with an ID. quiz_questions and
+// quiz_answers both have a NOT NULL foreign key on word_id, so they must be
+// deleted first or the word delete fails with a foreign key violation.
+func (a *Adapter) Delete(ctx context.Context, userID int64, wordID int64) (bool, error) {
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	ownedWordSubquery := `(SELECT id FROM words WHERE id = ? AND user_id = ?)`
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM quiz_answers WHERE word_id IN `+ownedWordSubquery, wordID, userID,
+	); err != nil {
+		return false, fmt.Errorf("failed to delete quiz answers: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM quiz_questions WHERE word_id IN `+ownedWordSubquery, wordID, userID,
+	); err != nil {
+		return false, fmt.Errorf("failed to delete quiz questions: %w", err)
+	}
+	res, err := tx.ExecContext(ctx,
+		`DELETE FROM words WHERE id = ? AND user_id = ?`, wordID, userID,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to delete word: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to read rows affected: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("failed to commit: %w", err)
+	}
+	return rows > 0, nil
 }
 
 // UpdateAfterQuiz implements service.WordRepository. It bumps the word's
@@ -518,4 +622,62 @@ func (a *Adapter) GetCompletedStats(ctx context.Context, userID int64) (count in
 		return 0, nil, fmt.Errorf("failed to parse last completed at: %w", err)
 	}
 	return count, lastCompletedAt, nil
+}
+
+// CreateToken implements service.DashboardTokenRepository. It generates a
+// cryptographically random token (not math/rand — this grants dashboard
+// access, so it needs real entropy) and persists it with the given TTL.
+func (a *Adapter) CreateToken(ctx context.Context, userID int64, ttl time.Duration) (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("failed to generate token: %w", err)
+	}
+	token := base64.RawURLEncoding.EncodeToString(buf)
+
+	if _, err := a.db.ExecContext(ctx,
+		`INSERT INTO dashboard_tokens (token, user_id, expires_at) VALUES (?, ?, ?)`,
+		token, userID, time.Now().Add(ttl),
+	); err != nil {
+		return "", fmt.Errorf("failed to save dashboard token: %w", err)
+	}
+	return token, nil
+}
+
+// ConsumeToken implements service.DashboardTokenRepository. It validates
+// the token (exists, unexpired, unused) and marks it used in the same
+// transaction, so a normal replay (opening the same link again later)
+// always fails.
+func (a *Adapter) ConsumeToken(ctx context.Context, token string) (int64, error) {
+	tx, err := a.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	var userID int64
+	var expiresAt time.Time
+	var usedAt sql.NullTime
+	err = tx.QueryRowContext(ctx,
+		`SELECT user_id, expires_at, used_at FROM dashboard_tokens WHERE token = ?`, token,
+	).Scan(&userID, &expiresAt, &usedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, service.ErrInvalidToken
+	}
+	if err != nil {
+		return 0, fmt.Errorf("failed to load dashboard token: %w", err)
+	}
+	if usedAt.Valid || time.Now().After(expiresAt) {
+		return 0, service.ErrInvalidToken
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE dashboard_tokens SET used_at = CURRENT_TIMESTAMP WHERE token = ?`, token,
+	); err != nil {
+		return 0, fmt.Errorf("failed to mark token used: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("failed to commit: %w", err)
+	}
+
+	return userID, nil
 }
