@@ -16,6 +16,7 @@ type Handler struct {
 	words     *WordHandler
 	list      *ListHandler
 	quiz      *QuizHandler
+	status    *StatusHandler
 }
 
 func NewHandler(messenger service.Messenger, users service.UserRepository, wordService *service.WordService, wordRepo service.WordRepository, quizRepo service.QuizRepository, quizService *service.QuizService) *Handler {
@@ -25,6 +26,7 @@ func NewHandler(messenger service.Messenger, users service.UserRepository, wordS
 		words:     NewWordHandler(messenger, wordService),
 		list:      NewListHandler(messenger, wordRepo),
 		quiz:      NewQuizHandler(messenger, wordRepo, quizRepo, quizService),
+		status:    NewStatusHandler(messenger, wordRepo, quizRepo),
 	}
 }
 
@@ -72,6 +74,8 @@ func (h *Handler) handleCommand(ctx context.Context, chat string, user *service.
 		h.list.Handle(ctx, chat, user.ID, cmd.Args)
 	case "quiz":
 		h.quiz.Start(ctx, chat, user)
+	case "status":
+		h.status.Handle(ctx, chat, user.ID)
 	default:
 		h.messenger.Send(chat, "Comando não implementado ainda.")
 	}

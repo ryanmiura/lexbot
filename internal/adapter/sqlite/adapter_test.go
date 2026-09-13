@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"lexbot/internal/adapter/sqlite"
 	"lexbot/internal/service"
@@ -194,4 +195,103 @@ func TestQuizSessionLifecycle(t *testing.T) {
 	if active, err := adapter.GetActiveSession(ctx, user.ID); err != nil || active != nil {
 		t.Fatalf("expected no active session after completion, got %+v (err=%v)", active, err)
 	}
+}
+
+func TestGetStats(t *testing.T) {
+	ctx := context.Background()
+	adapter := newTestAdapter(t)
+	user, err := adapter.Upsert(ctx, "5511999999999")
+	if err != nil {
+		t.Fatalf("failed to upsert user: %v", err)
+	}
+
+	t.Run("no words yet", func(t *testing.T) {
+		stats, err := adapter.GetStats(ctx, user.ID)
+		if err != nil {
+			t.Fatalf("GetStats failed: %v", err)
+		}
+		if stats.Total != 0 || stats.TimesReviewed != 0 || stats.TimesCorrect != 0 || stats.LastAddedAt != nil {
+			t.Errorf("expected zeroed stats with nil LastAddedAt, got %+v", stats)
+		}
+	})
+
+	w1 := newTestWord(t, adapter, user.ID, "one")
+	w2 := newTestWord(t, adapter, user.ID, "two")
+	_ = newTestWord(t, adapter, user.ID, "three")
+
+	if err := adapter.UpdateAfterQuiz(ctx, w1.ID, true); err != nil {
+		t.Fatalf("UpdateAfterQuiz failed: %v", err)
+	}
+	if err := adapter.UpdateAfterQuiz(ctx, w2.ID, false); err != nil {
+		t.Fatalf("UpdateAfterQuiz failed: %v", err)
+	}
+
+	t.Run("mixed difficulties and review totals", func(t *testing.T) {
+		stats, err := adapter.GetStats(ctx, user.ID)
+		if err != nil {
+			t.Fatalf("GetStats failed: %v", err)
+		}
+		if stats.Total != 3 {
+			t.Errorf("got Total=%d, want 3", stats.Total)
+		}
+		if stats.New != 1 {
+			t.Errorf("got New=%d, want 1 (word 'three' never reviewed)", stats.New)
+		}
+		if stats.Familiar != 1 || stats.Learning != 1 {
+			t.Errorf("got Familiar=%d Learning=%d, want Familiar=1 (w1, 100%%) Learning=1 (w2, 0%%)", stats.Familiar, stats.Learning)
+		}
+		if stats.TimesReviewed != 2 || stats.TimesCorrect != 1 {
+			t.Errorf("got TimesReviewed=%d TimesCorrect=%d, want 2 and 1", stats.TimesReviewed, stats.TimesCorrect)
+		}
+		if stats.LastAddedAt == nil {
+			t.Errorf("expected LastAddedAt to be set once words exist")
+		}
+	})
+}
+
+func TestGetCompletedStats(t *testing.T) {
+	ctx := context.Background()
+	adapter := newTestAdapter(t)
+	user, err := adapter.Upsert(ctx, "5511999999999")
+	if err != nil {
+		t.Fatalf("failed to upsert user: %v", err)
+	}
+	w := newTestWord(t, adapter, user.ID, "turn")
+
+	t.Run("no completed quizzes yet", func(t *testing.T) {
+		count, lastCompletedAt, err := adapter.GetCompletedStats(ctx, user.ID)
+		if err != nil {
+			t.Fatalf("GetCompletedStats failed: %v", err)
+		}
+		if count != 0 || lastCompletedAt != nil {
+			t.Errorf("got count=%d lastCompletedAt=%v, want 0 and nil", count, lastCompletedAt)
+		}
+	})
+
+	session := &service.QuizSession{UserID: user.ID, WordIDs: []int64{w.ID}, TotalQuestions: 1}
+	if err := adapter.SaveSession(ctx, session); err != nil {
+		t.Fatalf("SaveSession failed: %v", err)
+	}
+	session.Status = "completed"
+	now := time.Now().UTC().Truncate(time.Second)
+	session.CompletedAt = &now
+	if err := adapter.UpdateSession(ctx, session); err != nil {
+		t.Fatalf("UpdateSession failed: %v", err)
+	}
+
+	t.Run("one completed quiz", func(t *testing.T) {
+		count, lastCompletedAt, err := adapter.GetCompletedStats(ctx, user.ID)
+		if err != nil {
+			t.Fatalf("GetCompletedStats failed: %v", err)
+		}
+		if count != 1 {
+			t.Errorf("got count=%d, want 1", count)
+		}
+		if lastCompletedAt == nil {
+			t.Fatalf("expected lastCompletedAt to be set")
+		}
+		if !lastCompletedAt.Equal(now) {
+			t.Errorf("got lastCompletedAt=%v, want %v", lastCompletedAt, now)
+		}
+	})
 }
