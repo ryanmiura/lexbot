@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
+	"time"
 
 	"lexbot/internal/service"
 )
@@ -48,12 +50,17 @@ func (h *WordHandler) Handle(ctx context.Context, chat string, userID int64, msg
 // handleOne processes a single word sent by the user.
 func (h *WordHandler) handleOne(ctx context.Context, chat string, userID int64, word string) {
 	if err := h.messenger.Send(chat, fmt.Sprintf("⏳ Processando \"%s\"...", word)); err != nil {
-		fmt.Printf("Error sending feedback message: %v\n", err)
+		slog.Error("failed to send processing feedback", "user_id", userID, "error", err)
 	}
 
+	start := time.Now()
 	aiWord, alreadyExists, err := h.wordService.ProcessNewWord(ctx, userID, word)
+	latencyMs := time.Since(start).Milliseconds()
+
 	if err != nil {
-		fmt.Printf("Error processing word %q: %v\n", word, err)
+		slog.Error("word processing failed",
+			"user_id", userID, "word", word, "latency_ms", latencyMs, "error", err,
+		)
 		if errors.Is(err, service.ErrWordNotRecognized) {
 			h.messenger.Send(chat, fmt.Sprintf(
 				"🤔 Não consegui reconhecer \"%s\" como uma palavra ou expressão em inglês para ensinar. Tente enviar uma palavra em inglês (ex: \"resilient\").",
@@ -65,12 +72,16 @@ func (h *WordHandler) handleOne(ctx context.Context, chat string, userID int64, 
 		return
 	}
 
+	slog.Info("word processed",
+		"user_id", userID, "word", word, "already_existed", alreadyExists, "latency_ms", latencyMs,
+	)
+
 	card := formatWordCard(aiWord)
 	if alreadyExists {
 		card = "⚠️ Você já tem essa palavra na sua lista!\n\n" + card
 	}
 	if err := h.messenger.Send(chat, card); err != nil {
-		fmt.Printf("Error sending card: %v\n", err)
+		slog.Error("failed to send word card", "user_id", userID, "word", word, "error", err)
 	}
 }
 

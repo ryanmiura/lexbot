@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
+	"time"
 
 	"lexbot/internal/service"
 
@@ -146,6 +148,7 @@ func NewAdapter(apiKey string, baseURL string) *Adapter {
 
 // ProcessWord queries the AI and returns a structured Word object
 func (a *Adapter) ProcessWord(ctx context.Context, word string) (*service.Word, error) {
+	start := time.Now()
 	resp, err := a.client.CreateChatCompletion(
 		ctx,
 		openai.ChatCompletionRequest{
@@ -172,13 +175,24 @@ func (a *Adapter) ProcessWord(ctx context.Context, word string) (*service.Word, 
 		},
 	)
 
+	latencyMs := time.Since(start).Milliseconds()
+
 	if err != nil {
+		slog.Error("groq chat completion failed", "word", word, "latency_ms", latencyMs, "error", err)
 		return nil, fmt.Errorf("ChatCompletion error: %w", err)
 	}
 
 	if len(resp.Choices) == 0 {
+		slog.Error("groq returned no choices", "word", word, "latency_ms", latencyMs)
 		return nil, fmt.Errorf("no response from AI")
 	}
+
+	slog.Info("groq chat completion succeeded",
+		"word", word, "latency_ms", latencyMs,
+		"prompt_tokens", resp.Usage.PromptTokens,
+		"completion_tokens", resp.Usage.CompletionTokens,
+		"total_tokens", resp.Usage.TotalTokens,
+	)
 
 	rawJSON := resp.Choices[0].Message.Content
 	cleanJSON := cleanJSONMarkdown(rawJSON)
@@ -193,6 +207,7 @@ func (a *Adapter) ProcessWord(ctx context.Context, word string) (*service.Word, 
 	}
 
 	if !aiResponse.Recognized {
+		slog.Info("word not recognized by AI", "word", word)
 		return nil, service.ErrWordNotRecognized
 	}
 
