@@ -17,9 +17,19 @@ type Handler struct {
 	list      *ListHandler
 	quiz      *QuizHandler
 	status    *StatusHandler
+	dashboard *DashboardHandler
 }
 
-func NewHandler(messenger service.Messenger, users service.UserRepository, wordService *service.WordService, wordRepo service.WordRepository, quizRepo service.QuizRepository, quizService *service.QuizService) *Handler {
+func NewHandler(
+	messenger service.Messenger,
+	users service.UserRepository,
+	wordService *service.WordService,
+	wordRepo service.WordRepository,
+	quizRepo service.QuizRepository,
+	quizService *service.QuizService,
+	dashboardTokens service.DashboardTokenRepository,
+	dashboardBaseURL string,
+) *Handler {
 	return &Handler{
 		messenger: messenger,
 		users:     users,
@@ -27,6 +37,7 @@ func NewHandler(messenger service.Messenger, users service.UserRepository, wordS
 		list:      NewListHandler(messenger, wordRepo),
 		quiz:      NewQuizHandler(messenger, wordRepo, quizRepo, quizService),
 		status:    NewStatusHandler(messenger, wordRepo, quizRepo),
+		dashboard: NewDashboardHandler(messenger, dashboardTokens, dashboardBaseURL),
 	}
 }
 
@@ -76,6 +87,8 @@ func (h *Handler) handleCommand(ctx context.Context, chat string, user *service.
 		h.quiz.Start(ctx, chat, user)
 	case "status":
 		h.status.Handle(ctx, chat, user.ID)
+	case "dashboard":
+		h.dashboard.Handle(ctx, chat, user.ID)
 	default:
 		h.messenger.Send(chat, "Comando não implementado ainda.")
 	}

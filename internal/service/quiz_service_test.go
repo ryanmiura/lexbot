@@ -39,6 +39,12 @@ func (f *fakeWordRepository) UpdateAfterQuiz(ctx context.Context, wordID int64, 
 func (f *fakeWordRepository) GetStats(ctx context.Context, userID int64) (*WordStats, error) {
 	return &WordStats{}, nil
 }
+func (f *fakeWordRepository) Delete(ctx context.Context, userID int64, wordID int64) (bool, error) {
+	return true, nil
+}
+func (f *fakeWordRepository) SearchByUser(ctx context.Context, userID int64, query string) ([]*Word, error) {
+	return f.words, nil
+}
 
 type fakeQuizRepository struct {
 	savedAnswers []*QuizAnswer

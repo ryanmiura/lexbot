@@ -2,6 +2,7 @@ package sqlite_test
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -294,4 +295,208 @@ func TestGetCompletedStats(t *testing.T) {
 			t.Errorf("got lastCompletedAt=%v, want %v", lastCompletedAt, now)
 		}
 	})
+}
+
+func TestSearchByUser(t *testing.T) {
+	ctx := context.Background()
+	adapter := newTestAdapter(t)
+	user, err := adapter.Upsert(ctx, "5511999999999")
+	if err != nil {
+		t.Fatalf("failed to upsert user: %v", err)
+	}
+	other, err := adapter.Upsert(ctx, "5511888888888")
+	if err != nil {
+		t.Fatalf("failed to upsert other user: %v", err)
+	}
+	newTestWord(t, adapter, user.ID, "resilient")
+	newTestWord(t, adapter, user.ID, "turn")
+	newTestWord(t, adapter, other.ID, "resilient") // same word, different user — must not leak
+
+	tests := []struct {
+		name  string
+		query string
+		want  []string
+	}{
+		{"empty query returns everything", "", []string{"turn", "resilient"}},
+		{"matches word", "resil", []string{"resilient"}},
+		{"matches translation", "trad", []string{"turn", "resilient"}}, // newTestWord sets Translation="trad"
+		{"no match", "xyz", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := adapter.SearchByUser(ctx, user.ID, tt.query)
+			if err != nil {
+				t.Fatalf("SearchByUser failed: %v", err)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %d words, want %d (%+v)", len(got), len(tt.want), got)
+			}
+			for i, w := range got {
+				if w.Word != tt.want[i] {
+					t.Errorf("word[%d] = %q, want %q", i, w.Word, tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestDelete(t *testing.T) {
+	ctx := context.Background()
+	adapter := newTestAdapter(t)
+	user, err := adapter.Upsert(ctx, "5511999999999")
+	if err != nil {
+		t.Fatalf("failed to upsert user: %v", err)
+	}
+	other, err := adapter.Upsert(ctx, "5511888888888")
+	if err != nil {
+		t.Fatalf("failed to upsert other user: %v", err)
+	}
+
+	t.Run("deleting someone else's word is a no-op", func(t *testing.T) {
+		w := newTestWord(t, adapter, user.ID, "turn")
+		deleted, err := adapter.Delete(ctx, other.ID, w.ID)
+		if err != nil {
+			t.Fatalf("Delete failed: %v", err)
+		}
+		if deleted {
+			t.Errorf("expected deleted=false when the word doesn't belong to the caller")
+		}
+		got, err := adapter.FindByID(ctx, w.ID)
+		if err != nil {
+			t.Fatalf("FindByID failed: %v", err)
+		}
+		if got == nil {
+			t.Fatalf("expected word to survive a delete attempt by a different user")
+		}
+	})
+
+	t.Run("deletes a word with quiz history without violating foreign keys", func(t *testing.T) {
+		w := newTestWord(t, adapter, user.ID, "resilient")
+		// Give it quiz history: a session and a couple of answers, both of
+		// which have a NOT NULL foreign key on word_id.
+		session := &service.QuizSession{UserID: user.ID, WordIDs: []int64{w.ID}, TotalQuestions: 1}
+		if err := adapter.SaveSession(ctx, session); err != nil {
+			t.Fatalf("SaveSession failed: %v", err)
+		}
+		if err := adapter.SaveAnswer(ctx, &service.QuizAnswer{
+			SessionID: session.ID, WordID: w.ID, QuestionType: "reverse",
+			UserAnswer: "resilient", CorrectAnswer: "resilient", IsCorrect: true,
+		}); err != nil {
+			t.Fatalf("SaveAnswer failed: %v", err)
+		}
+
+		deleted, err := adapter.Delete(ctx, user.ID, w.ID)
+		if err != nil {
+			t.Fatalf("Delete failed: %v", err)
+		}
+		if !deleted {
+			t.Errorf("expected deleted=true when the word belongs to the caller")
+		}
+		got, err := adapter.FindByID(ctx, w.ID)
+		if err != nil {
+			t.Fatalf("FindByID failed: %v", err)
+		}
+		if got != nil {
+			t.Fatalf("expected word to be gone after Delete, got %+v", got)
+		}
+	})
+}
+
+func TestUpdatePreferences(t *testing.T) {
+	ctx := context.Background()
+	adapter := newTestAdapter(t)
+	user, err := adapter.Upsert(ctx, "5511999999999")
+	if err != nil {
+		t.Fatalf("failed to upsert user: %v", err)
+	}
+	if !user.QuizHintsEnabled {
+		t.Fatalf("expected quiz hints enabled by default")
+	}
+
+	if err := adapter.UpdatePreferences(ctx, user.ID, false); err != nil {
+		t.Fatalf("UpdatePreferences failed: %v", err)
+	}
+
+	// Upsert on an existing phone just re-reads the row, so it doubles as a
+	// way to confirm the preference actually persisted.
+	got, err := adapter.Upsert(ctx, "5511999999999")
+	if err != nil {
+		t.Fatalf("failed to re-read user: %v", err)
+	}
+	if got.QuizHintsEnabled {
+		t.Errorf("expected quiz hints disabled after UpdatePreferences")
+	}
+}
+
+func TestDashboardTokenLifecycle(t *testing.T) {
+	ctx := context.Background()
+	adapter := newTestAdapter(t)
+	user, err := adapter.Upsert(ctx, "5511999999999")
+	if err != nil {
+		t.Fatalf("failed to upsert user: %v", err)
+	}
+
+	t.Run("valid token resolves to the right user, once", func(t *testing.T) {
+		token, err := adapter.CreateToken(ctx, user.ID, 15*time.Minute)
+		if err != nil {
+			t.Fatalf("CreateToken failed: %v", err)
+		}
+		if token == "" {
+			t.Fatalf("expected a non-empty token")
+		}
+
+		gotUserID, err := adapter.ConsumeToken(ctx, token)
+		if err != nil {
+			t.Fatalf("ConsumeToken failed: %v", err)
+		}
+		if gotUserID != user.ID {
+			t.Errorf("got userID=%d, want %d", gotUserID, user.ID)
+		}
+
+		if _, err := adapter.ConsumeToken(ctx, token); !errors.Is(err, service.ErrInvalidToken) {
+			t.Errorf("expected ErrInvalidToken on replay, got %v", err)
+		}
+	})
+
+	t.Run("unknown token", func(t *testing.T) {
+		if _, err := adapter.ConsumeToken(ctx, "does-not-exist"); !errors.Is(err, service.ErrInvalidToken) {
+			t.Errorf("expected ErrInvalidToken, got %v", err)
+		}
+	})
+
+	t.Run("expired token", func(t *testing.T) {
+		token, err := adapter.CreateToken(ctx, user.ID, -1*time.Minute) // already expired
+		if err != nil {
+			t.Fatalf("CreateToken failed: %v", err)
+		}
+		if _, err := adapter.ConsumeToken(ctx, token); !errors.Is(err, service.ErrInvalidToken) {
+			t.Errorf("expected ErrInvalidToken for an expired token, got %v", err)
+		}
+	})
+}
+
+func TestFindUserByID(t *testing.T) {
+	ctx := context.Background()
+	adapter := newTestAdapter(t)
+	user, err := adapter.Upsert(ctx, "5511999999999")
+	if err != nil {
+		t.Fatalf("failed to upsert user: %v", err)
+	}
+
+	got, err := adapter.FindUserByID(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("FindUserByID failed: %v", err)
+	}
+	if got == nil || got.Phone != "5511999999999" {
+		t.Fatalf("unexpected user: %+v", got)
+	}
+
+	missing, err := adapter.FindUserByID(ctx, user.ID+999)
+	if err != nil {
+		t.Fatalf("FindUserByID for missing id failed: %v", err)
+	}
+	if missing != nil {
+		t.Fatalf("expected nil for missing id, got %+v", missing)
+	}
 }

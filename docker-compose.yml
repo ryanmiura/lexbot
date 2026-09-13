@@ -9,3 +9,22 @@ services:
       - DB_PATH=/app/data/session.db
     volumes:
       - ./lexbot-data:/app/data
+
+  lexbot-api:
+    image: ghcr.io/ryanmiura/lexbot-api:latest
+    container_name: lexbot-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DB_PATH=/app/data/session.db
+    volumes:
+      - ./lexbot-data:/app/data
+    ports:
+      # Loopback only — same convention as the other proxied services on
+      # this VPS (see docs/deploy-lp.md): NPM reverse-proxies from the
+      # public domain to 127.0.0.1:8081, TLS terminated at NPM. This must
+      # be reachable by anyone with a valid magic link, not just devices on
+      # the Tailscale network — unlike sqlite-web/Dozzle, which are
+      # owner-only tools bound to the Tailscale IP instead.
+      - "127.0.0.1:8081:8081"

@@ -21,6 +21,13 @@ type AIProvider interface {
 // UserRepository abstracts access to user data, keyed by WhatsApp phone number.
 type UserRepository interface {
 	Upsert(ctx context.Context, phone string) (*User, error)
+	// FindUserByID loads a user by primary key, used by the web dashboard
+	// (sessions are keyed by user ID, not phone). Returns nil, nil if no
+	// user with that ID exists.
+	FindUserByID(ctx context.Context, userID int64) (*User, error)
+	// UpdatePreferences persists the user's quiz-hint preference, used by
+	// the web dashboard.
+	UpdatePreferences(ctx context.Context, userID int64, quizHintsEnabled bool) error
 }
 
 // WordRepository abstracts access to word data and its associated quiz questions.
@@ -41,6 +48,18 @@ type WordRepository interface {
 	// GetStats returns aggregated word counts (by difficulty) and review
 	// totals for the user, used by the /status command.
 	GetStats(ctx context.Context, userID int64) (*WordStats, error)
+	// Delete removes a word (and its quiz questions/answers) if it belongs
+	// to userID, used by the web dashboard. Deleting a word that doesn't
+	// belong to userID (or doesn't exist) is a no-op, not an error — the
+	// scoped WHERE clause is what prevents deleting someone else's word.
+	// deleted reports whether a row was actually removed, so callers can
+	// tell a genuine deletion apart from a no-op.
+	Delete(ctx context.Context, userID int64, wordID int64) (deleted bool, err error)
+	// SearchByUser is like ListByUser but narrows results to words whose
+	// word or translation contains query (case-insensitive), used by the
+	// web dashboard's search box. An empty query behaves like ListByUser
+	// with no filter.
+	SearchByUser(ctx context.Context, userID int64, query string) ([]*Word, error)
 }
 
 // QuizRepository abstracts access to quiz session and answer data.
@@ -57,4 +76,18 @@ type QuizRepository interface {
 	// completed and when the most recent one finished, used by /status.
 	// lastCompletedAt is nil if the user has never completed a quiz.
 	GetCompletedStats(ctx context.Context, userID int64) (count int, lastCompletedAt *time.Time, err error)
+}
+
+// DashboardTokenRepository abstracts magic-link token issuance and
+// validation for the web dashboard: "/dashboard" on WhatsApp creates a
+// token, and the dashboard's /d/{token} endpoint consumes it.
+type DashboardTokenRepository interface {
+	// CreateToken generates and persists a new random token for userID,
+	// valid for ttl.
+	CreateToken(ctx context.Context, userID int64, ttl time.Duration) (token string, err error)
+	// ConsumeToken validates token (exists, unexpired, unused), marks it
+	// used so it can never be replayed, and returns the associated user
+	// ID. Returns ErrInvalidToken if the token is missing, expired, or
+	// already used.
+	ConsumeToken(ctx context.Context, token string) (userID int64, err error)
 }

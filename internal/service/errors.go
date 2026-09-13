@@ -13,3 +13,7 @@ var ErrWordNotRecognized = errors.New("word not recognized as valid English voca
 // parsed successfully but is missing required fields. A word must never be
 // persisted with incomplete data.
 var ErrIncompleteWordData = errors.New("AI response is missing required fields")
+
+// ErrInvalidToken is returned by DashboardTokenRepository.ConsumeToken when
+// the given magic-link token is missing, expired, or already used.
+var ErrInvalidToken = errors.New("dashboard token is invalid, expired, or already used")
