@@ -15,7 +15,8 @@ import (
 // be reused as a standing credential.
 const dashboardTokenTTL = 15 * time.Minute
 
-// DashboardHandler handles the "/dashboard" command.
+// DashboardHandler opens Meu vocabulário via /vocabulario or /vocabulary.
+// The original /dashboard command and URL remain compatible.
 type DashboardHandler struct {
 	messenger service.Messenger
 	tokens    service.DashboardTokenRepository
@@ -33,7 +34,7 @@ func NewDashboardHandler(messenger service.Messenger, tokens service.DashboardTo
 func (h *DashboardHandler) Handle(ctx context.Context, chat string, userID int64) {
 	if h.baseURL == "" {
 		slog.Error("dashboard requested but DASHBOARD_BASE_URL is not configured", "user_id", userID)
-		h.messenger.Send(chat, "❌ O dashboard ainda não está disponível. Tente novamente mais tarde.")
+		h.messenger.Send(chat, "❌ O gerenciamento do seu vocabulário ainda não está disponível. Tente novamente mais tarde.")
 		return
 	}
 
@@ -46,7 +47,7 @@ func (h *DashboardHandler) Handle(ctx context.Context, chat string, userID int64
 
 	link := fmt.Sprintf("%s/dashboard/%s", h.baseURL, token)
 	msg := fmt.Sprintf(
-		"🔗 Acesse seu dashboard (link válido por %d minutos, uso único):\n%s",
+		"📚 Acesse seu vocabulário (link válido por %d minutos, uso único):\n%s",
 		int(dashboardTokenTTL.Minutes()), link,
 	)
 	if err := h.messenger.Send(chat, msg); err != nil {

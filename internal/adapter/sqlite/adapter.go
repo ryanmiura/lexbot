@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"lexbot/internal/service"
@@ -248,13 +247,17 @@ func (a *Adapter) FindByID(ctx context.Context, id int64) (*service.Word, error)
 // ListByUser implements service.WordRepository. Quiz questions are not
 // loaded here since the list view doesn't need them.
 func (a *Adapter) ListByUser(ctx context.Context, userID int64, filter string) ([]*service.Word, error) {
+	filter, err := service.NormalizeListFilter(filter)
+	if err != nil {
+		return nil, err
+	}
 	query := `
 		SELECT id, user_id, word, translation, grammar_class, phonetic, definition_en,
 		       example_en, example_pt, synonyms, quiz_tip, quiz_error_explain, connected_speech,
 		       difficulty, times_reviewed, times_correct, last_reviewed_at, created_at
 		FROM words WHERE user_id = ?`
 
-	switch normalizeListFilter(filter) {
+	switch filter {
 	case "novas":
 		query += " AND difficulty = 'new'"
 	case "dificeis":
@@ -375,14 +378,15 @@ func (a *Adapter) UpdateAfterQuiz(ctx context.Context, wordID int64, correct boo
 			times_correct    = times_correct + ?,
 			last_reviewed_at = CURRENT_TIMESTAMP,
 			difficulty       = CASE
-				WHEN (CAST(times_correct + ? AS FLOAT) / (times_reviewed + 1)) >= 0.85
-				     AND (times_reviewed + 1) >= 5 THEN 'mastered'
-				WHEN (CAST(times_correct + ? AS FLOAT) / (times_reviewed + 1)) >= 0.60
+				WHEN (CAST(times_correct + ? AS FLOAT) / (times_reviewed + 1)) >= ?
+				     AND (times_reviewed + 1) >= ? THEN 'mastered'
+				WHEN (CAST(times_correct + ? AS FLOAT) / (times_reviewed + 1)) >= ?
 				     THEN 'familiar'
 				ELSE 'learning'
 			END
 		WHERE id = ?`,
-		correctIncrement, correctIncrement, correctIncrement, wordID,
+		correctIncrement, correctIncrement, service.MasteredMinimumAccuracy,
+		service.MasteredMinimumReviews, correctIncrement, service.FamiliarMinimumAccuracy, wordID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update word after quiz: %w", err)
@@ -447,19 +451,6 @@ func parseNullableSQLiteTime(s sql.NullString) (*time.Time, error) {
 		}
 	}
 	return nil, fmt.Errorf("unrecognized datetime format: %q", s.String)
-}
-
-// normalizeListFilter maps the raw "/lista <filter>" argument (with or
-// without accents) to a canonical filter key.
-func normalizeListFilter(filter string) string {
-	switch strings.ToLower(strings.TrimSpace(filter)) {
-	case "novas", "nova", "new":
-		return "novas"
-	case "dificeis", "difíceis", "dificil", "difícil":
-		return "dificeis"
-	default:
-		return ""
-	}
 }
 
 // fillQuizQuestions populates w.Quiz from the quiz_questions rows belonging to w.

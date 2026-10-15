@@ -136,10 +136,6 @@ func formatFinalResult(session *service.QuizSession, correctWords, incorrectWord
 	return sb.String()
 }
 
-var difficultyLabels = map[string]string{
-	"new": "novo", "learning": "aprendendo", "familiar": "familiar", "mastered": "dominado",
-}
-
 func formatWordList(words []*service.Word) string {
 	if len(words) == 0 {
 		return "📋 Você ainda não tem nenhuma palavra salva. Envie uma palavra em inglês para começar!"
@@ -148,12 +144,9 @@ func formatWordList(words []*service.Word) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "📋 Suas palavras (%d):\n\n", len(words))
 	for i, w := range words {
-		label := difficultyLabels[w.Difficulty]
-		if label == "" {
-			label = w.Difficulty
-		}
-		fmt.Fprintf(&sb, "%d. %s — %s (%s)\n", i+1, w.Word, w.Translation, label)
+		fmt.Fprintf(&sb, "%d. %s — %s (%s)\n", i+1, w.Word, w.Translation, service.WordLevelLabel(w.Difficulty))
 	}
+	sb.WriteString("\nℹ️ Entenda os níveis em /ajuda status ou /help status.")
 
 	return sb.String()
 }
@@ -183,6 +176,17 @@ func formatStatus(w *service.WordStats, quizzesCompleted int, lastQuizAt *time.T
 	if lastQuizAt != nil {
 		fmt.Fprintf(&sb, "🕐 Último quiz: %s\n", lastQuizAt.Format("02/01/2006"))
 	}
+	sb.WriteString("\nℹ️ Entenda os níveis em /ajuda status ou /help status.")
 
 	return sb.String()
+}
+
+func formatWordLevelGuide() string {
+	var message strings.Builder
+	message.WriteString("📚 Como funcionam os níveis?\n\n")
+	for _, level := range service.WordLevels() {
+		fmt.Fprintf(&message, "%s: %s\n", level.Label, level.Description)
+	}
+	fmt.Fprintf(&message, "\n%s", service.WordLevelNote)
+	return message.String()
 }

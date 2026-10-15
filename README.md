@@ -11,6 +11,51 @@ LexBot é um bot de WhatsApp desenvolvido em Go que utiliza Inteligência Artifi
   * Frases de exemplo em inglês e português.
 * **Sistema de Quizzes:** Geração de perguntas a partir do vocabulário salvo do próprio usuário. Inclui formatos de múltipla escolha, completar frases e tradução reversa.
 * **Revisão Adaptativa:** O bot prioriza palavras no quiz baseando-se na taxa de erro do usuário e no tempo desde a última revisão.
+* **Meu vocabulário:** Interface web para gerenciar palavras e expressões, acompanhar o progresso e ajustar as dicas do quiz.
+
+## Comandos
+
+Envie `/ajuda` ou `/help` no WhatsApp para consultar todos os comandos e exemplos. Use
+`/ajuda <comando>` para ver os detalhes de uma opção, como `/ajuda lista`.
+
+* `/lista` ou `/list`: lista as palavras salvas; aceita `/lista novas` (`/list new`)
+  e `/lista dificeis` (`/list difficult`).
+* `/quiz`: inicia ou retoma uma revisão.
+* `/status`: mostra seu progresso e sua taxa de acerto.
+* `/vocabulario` ou `/vocabulary`: abre **Meu vocabulário** no navegador, com um
+  link de uso único válido por 15 minutos. `/dashboard` continua funcionando.
+
+Comandos aceitam maiúsculas e minúsculas, e os filtros aceitam variações com ou
+sem acento (por exemplo, `difíceis` e `dificeis`). Filtros desconhecidos recebem
+orientação de uso. Os comandos em PT e EN têm o mesmo comportamento, com respostas
+em português. `/vocabulário` também é aceito. As URLs existentes em `/dashboard`
+permanecem compatíveis.
+
+Para cadastrar vocabulário, envie uma palavra ou expressão em inglês por texto.
+Para cadastrar várias de uma vez, use uma por linha, até 10 por mensagem. Durante
+um quiz, o texto enviado é tratado como resposta à pergunta atual; os comandos
+continuam disponíveis.
+
+Áudios (incluindo mensagens de voz), imagens e outras mídias recebem orientação
+para enviar o conteúdo por texto. As mídias e suas legendas não cadastram palavras,
+não contam como respostas e mantêm a configuração ou pergunta atual do quiz.
+Reações e notificações técnicas são ignoradas.
+
+## Níveis de aprendizado
+
+Os níveis são explicados em `/ajuda status` (ou `/help status`) e na seção
+**Como funcionam os níveis?** de **Meu vocabulário**.
+
+| Nível | Critério |
+| --- | --- |
+| Nova | Nenhuma resposta registrada em um quiz. |
+| Aprendendo | Já foi revisada e tem menos de 60% de acertos. |
+| Familiar | Pelo menos 60% de acertos, sem atender ao critério de Dominada. |
+| Dominada | Pelo menos 5 revisões e 85% de acertos. |
+
+Cada resposta conta como uma revisão. A taxa considera todo o histórico da
+palavra, e o nível pode subir ou descer a cada resposta. Um primeiro acerto já
+pode tornar uma palavra Familiar.
 
 ## Stack Tecnológica
 

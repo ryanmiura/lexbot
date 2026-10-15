@@ -14,6 +14,9 @@ var ErrWordNotRecognized = errors.New("word not recognized as valid English voca
 // persisted with incomplete data.
 var ErrIncompleteWordData = errors.New("AI response is missing required fields")
 
+// ErrInvalidListFilter means the requested vocabulary filter is unsupported.
+var ErrInvalidListFilter = errors.New("invalid word list filter")
+
 // ErrInvalidToken is returned by DashboardTokenRepository.ConsumeToken when
 // the given magic-link token is missing, expired, or already used.
 var ErrInvalidToken = errors.New("dashboard token is invalid, expired, or already used")
