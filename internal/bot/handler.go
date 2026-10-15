@@ -80,16 +80,10 @@ func (h *Handler) HandleMessage(ctx context.Context, chat string, phone string, 
 }
 
 func (h *Handler) handleCommand(ctx context.Context, chat string, user *service.User, cmd *Command) {
-	switch cmd.Name {
-	case "lista":
-		h.list.Handle(ctx, chat, user.ID, cmd.Args)
-	case "quiz":
-		h.quiz.Start(ctx, chat, user)
-	case "status":
-		h.status.Handle(ctx, chat, user.ID)
-	case "dashboard":
-		h.dashboard.Handle(ctx, chat, user.ID)
-	default:
-		h.messenger.Send(chat, "Comando não implementado ainda.")
+	command, ok := h.findCommand(cmd.Name)
+	if !ok {
+		h.messenger.Send(chat, "Não reconheci esse comando. Digite /ajuda para ver as opções.")
+		return
 	}
+	command.handle(ctx, chat, user, cmd.Args)
 }
