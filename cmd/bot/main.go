@@ -60,13 +60,8 @@ func main() {
 			return
 		}
 
-		msg := v.Message.GetExtendedTextMessage().GetText()
-		if msg == "" {
-			msg = v.Message.GetConversation()
-		}
-
 		phone := whatsmeow.ResolveSenderPhone(v.Info)
-		handler.HandleMessage(context.Background(), v.Info.Chat.String(), phone, msg)
+		handler.HandleIncomingMessage(context.Background(), v.Info.Chat.String(), phone, whatsmeow.ParseIncomingMessage(v.Message))
 	})
 
 	// Connect to WhatsApp

@@ -33,6 +33,11 @@ Para cadastrar várias de uma vez, use uma por linha, até 10 por mensagem. Dura
 um quiz, o texto enviado é tratado como resposta à pergunta atual; os comandos
 continuam disponíveis.
 
+Áudios (incluindo mensagens de voz), imagens e outras mídias recebem orientação
+para enviar o conteúdo por texto. As mídias e suas legendas não cadastram palavras,
+não contam como respostas e mantêm a configuração ou pergunta atual do quiz.
+Reações e notificações técnicas são ignoradas.
+
 ## Stack Tecnológica
 
 * **Linguagem:** [Go](https://go.dev/) - Utilizado para processamento concorrente e deploy facilitado em binário estático.
