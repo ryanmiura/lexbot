@@ -139,6 +139,50 @@ func TestMagicLinkInvalidToken(t *testing.T) {
 	}
 }
 
+func TestVocabularyWordLevels(t *testing.T) {
+	srv, adapter, sessions := newTestServer(t)
+	ctx := context.Background()
+	user, err := adapter.Upsert(ctx, "5511999999999")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		word     string
+		outcomes []bool
+	}{
+		{"new-word", nil},
+		{"learning-word", []bool{false}},
+		{"familiar-word", []bool{true}},
+		{"mastered-word", []bool{true, true, true, true, true}},
+	} {
+		word := newTestWord(t, adapter, user.ID, test.word)
+		for _, correct := range test.outcomes {
+			if err := adapter.UpdateAfterQuiz(ctx, word.ID, correct); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	req := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	req.AddCookie(sessionCookie(sessions, user.ID))
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(body, "<summary>Como funcionam os níveis?</summary>") {
+		t.Fatalf("missing accessible word level guide: status=%d", rec.Code)
+	}
+	for _, level := range service.WordLevels() {
+		if !strings.Contains(body, "<td>"+level.Label+"</td>") || !strings.Contains(body, level.Description) {
+			t.Errorf("missing translated level or explanation for %s", level.Code)
+		}
+		if strings.Contains(body, "<td>"+level.Code+"</td>") {
+			t.Errorf("table exposes internal level code %s", level.Code)
+		}
+	}
+	if !strings.Contains(body, service.WordLevelNote) {
+		t.Error("missing level recalculation guidance")
+	}
+}
+
 func TestDeleteWordScopedToOwner(t *testing.T) {
 	srv, adapter, sessions := newTestServer(t)
 	ctx := context.Background()

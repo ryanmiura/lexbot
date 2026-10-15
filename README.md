@@ -41,6 +41,22 @@ para enviar o conteúdo por texto. As mídias e suas legendas não cadastram pal
 não contam como respostas e mantêm a configuração ou pergunta atual do quiz.
 Reações e notificações técnicas são ignoradas.
 
+## Níveis de aprendizado
+
+Os níveis são explicados em `/ajuda status` (ou `/help status`) e na seção
+**Como funcionam os níveis?** de **Meu vocabulário**.
+
+| Nível | Critério |
+| --- | --- |
+| Nova | Nenhuma resposta registrada em um quiz. |
+| Aprendendo | Já foi revisada e tem menos de 60% de acertos. |
+| Familiar | Pelo menos 60% de acertos, sem atender ao critério de Dominada. |
+| Dominada | Pelo menos 5 revisões e 85% de acertos. |
+
+Cada resposta conta como uma revisão. A taxa considera todo o histórico da
+palavra, e o nível pode subir ou descer a cada resposta. Um primeiro acerto já
+pode tornar uma palavra Familiar.
+
 ## Stack Tecnológica
 
 * **Linguagem:** [Go](https://go.dev/) - Utilizado para processamento concorrente e deploy facilitado em binário estático.

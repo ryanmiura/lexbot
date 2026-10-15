@@ -155,6 +155,26 @@ func TestUpdateAfterQuizDifficultyTransitions(t *testing.T) {
 			t.Errorf("got difficulty=%s, want familiar (100%% but only 3 reviews, needs >=5 for mastered)", got.Difficulty)
 		}
 	})
+
+	t.Run("exactly 85%% is mastered and later errors can lower the level", func(t *testing.T) {
+		w := newTestWord(t, adapter, user.ID, "boundary")
+		for review := range 20 {
+			if err := adapter.UpdateAfterQuiz(ctx, w.ID, review < 17); err != nil {
+				t.Fatal(err)
+			}
+		}
+		got, err := adapter.FindByID(ctx, w.ID)
+		if err != nil || got.Difficulty != "mastered" || got.TimesReviewed != 20 || got.TimesCorrect != 17 {
+			t.Fatalf("17/20 must be mastered: %+v, %v", got, err)
+		}
+		if err := adapter.UpdateAfterQuiz(ctx, w.ID, false); err != nil {
+			t.Fatal(err)
+		}
+		got, err = adapter.FindByID(ctx, w.ID)
+		if err != nil || got.Difficulty != "familiar" {
+			t.Fatalf("17/21 must return to familiar: %+v, %v", got, err)
+		}
+	})
 }
 
 func TestQuizSessionLifecycle(t *testing.T) {

@@ -16,7 +16,9 @@ import (
 //go:embed templates/*.html
 var templateFS embed.FS
 
-var templates = template.Must(template.ParseFS(templateFS, "templates/*.html"))
+var templates = template.Must(template.New("").Funcs(template.FuncMap{
+	"wordLevelLabel": service.WordLevelLabel,
+}).ParseFS(templateFS, "templates/*.html"))
 
 // Server implements http.Handler for the web dashboard: it authenticates
 // visitors via SessionManager and reads/writes through the same
@@ -140,6 +142,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		Words:            words,
 		Query:            query,
 		HintsEnabled:     user.QuizHintsEnabled,
+		WordLevels:       service.WordLevels(),
+		WordLevelNote:    service.WordLevelNote,
 	}
 	if stats.TimesReviewed > 0 {
 		data.Accuracy = fmt.Sprintf("%.0f%%", float64(stats.TimesCorrect)/float64(stats.TimesReviewed)*100)
@@ -219,6 +223,8 @@ type dashboardPageData struct {
 	Words            []*service.Word
 	Query            string
 	HintsEnabled     bool
+	WordLevels       []service.WordLevel
+	WordLevelNote    string
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data any) {

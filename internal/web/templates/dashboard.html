@@ -16,6 +16,11 @@
   h1 { font-size: 1.4rem; margin-bottom: 0.35rem; }
   h2 { font-size: 1.05rem; margin-top: 1.5rem; }
   .intro { opacity: 0.8; margin-top: 0; }
+  .levels { margin: 1rem 0 1.5rem; }
+  .levels summary { cursor: pointer; font-weight: 600; }
+  .levels dt { font-weight: 600; margin-top: 0.75rem; }
+  .levels dd { margin-left: 0; }
+  .levels p { font-size: 0.9rem; opacity: 0.8; }
   .stats { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.5rem; }
   .stat {
     background: rgba(127,127,127,0.12);
@@ -81,6 +86,17 @@
     {{end}}
   </div>
 
+  <details class="levels">
+    <summary>Como funcionam os níveis?</summary>
+    <dl>
+      {{range .WordLevels}}
+      <dt>{{.Label}}</dt>
+      <dd>{{.Description}}</dd>
+      {{end}}
+    </dl>
+    <p>{{.WordLevelNote}}</p>
+  </details>
+
   {{if or .LastWordAt .LastQuizAt}}
   <p class="meta">
     {{if .LastWordAt}}🕐 Última palavra cadastrada: {{.LastWordAt}}{{end}}
@@ -112,7 +128,7 @@
       <tr>
         <td class="word-cell">{{.Word}}</td>
         <td>{{.Translation}}</td>
-        <td>{{.Difficulty}}</td>
+        <td>{{wordLevelLabel .Difficulty}}</td>
         <td>
           <form method="post" action="/dashboard/words/{{.ID}}/delete"
                 onsubmit="return confirm('Excluir &quot;{{.Word}}&quot;? Isso remove o histórico de quiz dessa palavra também.');">

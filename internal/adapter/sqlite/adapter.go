@@ -378,14 +378,15 @@ func (a *Adapter) UpdateAfterQuiz(ctx context.Context, wordID int64, correct boo
 			times_correct    = times_correct + ?,
 			last_reviewed_at = CURRENT_TIMESTAMP,
 			difficulty       = CASE
-				WHEN (CAST(times_correct + ? AS FLOAT) / (times_reviewed + 1)) >= 0.85
-				     AND (times_reviewed + 1) >= 5 THEN 'mastered'
-				WHEN (CAST(times_correct + ? AS FLOAT) / (times_reviewed + 1)) >= 0.60
+				WHEN (CAST(times_correct + ? AS FLOAT) / (times_reviewed + 1)) >= ?
+				     AND (times_reviewed + 1) >= ? THEN 'mastered'
+				WHEN (CAST(times_correct + ? AS FLOAT) / (times_reviewed + 1)) >= ?
 				     THEN 'familiar'
 				ELSE 'learning'
 			END
 		WHERE id = ?`,
-		correctIncrement, correctIncrement, correctIncrement, wordID,
+		correctIncrement, correctIncrement, service.MasteredMinimumAccuracy,
+		service.MasteredMinimumReviews, correctIncrement, service.FamiliarMinimumAccuracy, wordID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update word after quiz: %w", err)

@@ -46,6 +46,7 @@ func (h *Handler) commands() []commandDefinition {
 			names:       []string{"status"},
 			description: "Consultar seu progresso, níveis e taxa de acerto.",
 			examples:    []string{"/status"},
+			details:     formatWordLevelGuide(),
 			handle: func(ctx context.Context, chat string, user *service.User, _ string) {
 				h.status.Handle(ctx, chat, user.ID)
 			},
@@ -101,7 +102,7 @@ func (h *Handler) handleHelp(_ context.Context, chat string, _ *service.User, to
 			fmt.Fprintf(&message, "Exemplos: %s\n\n", strings.Join(command.examples, "; "))
 		}
 		fmt.Fprintf(&message, "Para cadastrar: envie uma palavra ou expressão em inglês por texto (ex.: resilient ou look forward to). Para enviar várias, use uma por linha, até %d por mensagem.\n\n", maxWordsPerMessage)
-		message.WriteString("Durante um quiz, suas mensagens de texto são respostas à pergunta atual. Os comandos continuam disponíveis.\n\nDigite /ajuda <comando> para saber mais.")
+		message.WriteString("Durante um quiz, suas mensagens de texto são respostas à pergunta atual. Os comandos continuam disponíveis.\n\nDigite /ajuda status ou /help status para entender os níveis. Use /ajuda <comando> para saber mais sobre outra opção.")
 	}
 	if err := h.messenger.Send(chat, message.String()); err != nil {
 		slog.Error("failed to send help", "error", err)

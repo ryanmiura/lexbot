@@ -145,3 +145,30 @@ func TestCommandGuidance(t *testing.T) {
 		})
 	}
 }
+
+func TestWordLevelGuidance(t *testing.T) {
+	handler, messenger, repo, user := newTestHandler(t)
+	ctx := context.Background()
+	for _, command := range []string{"/ajuda status", "/help status"} {
+		handler.HandleMessage(ctx, "chat", testPhone, command)
+		for _, level := range service.WordLevels() {
+			if !strings.Contains(messenger.last(), level.Label+": "+level.Description) {
+				t.Errorf("%s is missing the %s explanation", command, level.Code)
+			}
+		}
+		for _, detail := range []string{"60%", "85%", "5 revisões", "pode subir ou descer", "Um primeiro acerto"} {
+			if !strings.Contains(messenger.last(), detail) {
+				t.Errorf("%s is missing level detail %q", command, detail)
+			}
+		}
+	}
+	saveTestWord(t, repo, user.ID, "resilient")
+	handler.HandleMessage(ctx, "chat", testPhone, "/list")
+	if got := messenger.last(); !strings.Contains(got, "(Nova)") || !strings.Contains(got, "/ajuda status") {
+		t.Fatalf("list must translate levels and link to the guide: %s", got)
+	}
+	handler.HandleMessage(ctx, "chat", testPhone, "/status")
+	if !strings.Contains(messenger.last(), "/ajuda status") {
+		t.Fatal("progress must link to the level guide")
+	}
+}
