@@ -14,13 +14,19 @@ LexBot é um bot de WhatsApp desenvolvido em Go que utiliza Inteligência Artifi
 
 ## Comandos
 
-Envie `/ajuda` no WhatsApp para consultar todos os comandos e exemplos. Use
+Envie `/ajuda` ou `/help` no WhatsApp para consultar todos os comandos e exemplos. Use
 `/ajuda <comando>` para ver os detalhes de uma opção, como `/ajuda lista`.
 
-* `/lista`: lista as palavras salvas; aceita `/lista novas` e `/lista dificeis`.
+* `/lista` ou `/list`: lista as palavras salvas; aceita `/lista novas` (`/list new`)
+  e `/lista dificeis` (`/list difficult`).
 * `/quiz`: inicia ou retoma uma revisão.
 * `/status`: mostra seu progresso e sua taxa de acerto.
 * `/dashboard`: abre o gerenciamento das palavras no navegador.
+
+Comandos aceitam maiúsculas e minúsculas, e os filtros aceitam variações com ou
+sem acento (por exemplo, `difíceis` e `dificeis`). Filtros desconhecidos recebem
+orientação de uso. Os comandos em PT e EN têm o mesmo comportamento, com respostas
+em português.
 
 Para cadastrar vocabulário, envie uma palavra ou expressão em inglês por texto.
 Para cadastrar várias de uma vez, use uma por linha, até 10 por mensagem. Durante

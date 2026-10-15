@@ -20,6 +20,11 @@ func NewListHandler(messenger service.Messenger, wordRepo service.WordRepository
 // Handle replies with the user's saved words, optionally narrowed by filter
 // (e.g. "novas", "dificeis").
 func (h *ListHandler) Handle(ctx context.Context, chat string, userID int64, filter string) {
+	filter, err := service.NormalizeListFilter(filter)
+	if err != nil {
+		h.messenger.Send(chat, "Não reconheci esse filtro. Use /lista, /lista novas ou /lista dificeis. Em inglês: /list, /list new ou /list difficult.")
+		return
+	}
 	words, err := h.wordRepo.ListByUser(ctx, userID, filter)
 	if err != nil {
 		slog.Error("failed to list words", "user_id", userID, "filter", filter, "error", err)

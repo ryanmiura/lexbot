@@ -21,15 +21,15 @@ type commandDefinition struct {
 func (h *Handler) commands() []commandDefinition {
 	return []commandDefinition{
 		{
-			names:       []string{"ajuda"},
+			names:       []string{"ajuda", "help"},
 			description: "Mostrar os comandos disponíveis e exemplos de uso.",
-			examples:    []string{"/ajuda", "/ajuda lista"},
+			examples:    []string{"/ajuda", "/help", "/ajuda lista"},
 			handle:      h.handleHelp,
 		},
 		{
-			names:       []string{"lista"},
+			names:       []string{"lista", "list"},
 			description: "Listar suas palavras salvas, com filtros opcionais.",
-			examples:    []string{"/lista", "/lista novas", "/lista dificeis"},
+			examples:    []string{"/lista", "/lista novas", "/list new", "/lista dificeis", "/list difficult"},
 			handle: func(ctx context.Context, chat string, user *service.User, args string) {
 				h.list.Handle(ctx, chat, user.ID, args)
 			},
@@ -62,7 +62,7 @@ func (h *Handler) commands() []commandDefinition {
 }
 
 func (h *Handler) findCommand(name string) (commandDefinition, bool) {
-	name = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(name), "/"))
+	name = normalizeCommandName(strings.TrimPrefix(strings.TrimSpace(name), "/"))
 	for _, command := range h.commands() {
 		for _, alias := range command.names {
 			if name == alias {

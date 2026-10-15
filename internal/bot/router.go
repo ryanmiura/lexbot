@@ -1,6 +1,9 @@
 package bot
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // MessageType classifies an incoming text message.
 type MessageType int
@@ -19,14 +22,26 @@ type Command struct {
 // Classify splits an already-trimmed message into a command (messages
 // starting with "/") or plain text, which is treated as one or more words.
 func Classify(msg string) (MessageType, *Command) {
+	msg = strings.TrimSpace(msg)
 	if !strings.HasPrefix(msg, "/") {
 		return MessageTypeWord, nil
 	}
 
-	parts := strings.SplitN(strings.TrimPrefix(msg, "/"), " ", 2)
-	cmd := &Command{Name: strings.ToLower(strings.TrimSpace(parts[0]))}
-	if len(parts) > 1 {
-		cmd.Args = strings.TrimSpace(parts[1])
+	name := strings.TrimPrefix(msg, "/")
+	cmd := &Command{}
+	if end := strings.IndexFunc(name, unicode.IsSpace); end >= 0 {
+		cmd.Args = strings.TrimSpace(name[end:])
+		name = name[:end]
 	}
+	cmd.Name = normalizeCommandName(name)
 	return MessageTypeCommand, cmd
+}
+
+var commandAccents = strings.NewReplacer(
+	"á", "a", "à", "a", "â", "a", "ã", "a", "é", "e", "ê", "e",
+	"í", "i", "ó", "o", "ô", "o", "õ", "o", "ú", "u", "ç", "c",
+)
+
+func normalizeCommandName(name string) string {
+	return commandAccents.Replace(strings.ToLower(strings.TrimSpace(name)))
 }

@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"lexbot/internal/service"
@@ -248,13 +247,17 @@ func (a *Adapter) FindByID(ctx context.Context, id int64) (*service.Word, error)
 // ListByUser implements service.WordRepository. Quiz questions are not
 // loaded here since the list view doesn't need them.
 func (a *Adapter) ListByUser(ctx context.Context, userID int64, filter string) ([]*service.Word, error) {
+	filter, err := service.NormalizeListFilter(filter)
+	if err != nil {
+		return nil, err
+	}
 	query := `
 		SELECT id, user_id, word, translation, grammar_class, phonetic, definition_en,
 		       example_en, example_pt, synonyms, quiz_tip, quiz_error_explain, connected_speech,
 		       difficulty, times_reviewed, times_correct, last_reviewed_at, created_at
 		FROM words WHERE user_id = ?`
 
-	switch normalizeListFilter(filter) {
+	switch filter {
 	case "novas":
 		query += " AND difficulty = 'new'"
 	case "dificeis":
@@ -447,19 +450,6 @@ func parseNullableSQLiteTime(s sql.NullString) (*time.Time, error) {
 		}
 	}
 	return nil, fmt.Errorf("unrecognized datetime format: %q", s.String)
-}
-
-// normalizeListFilter maps the raw "/lista <filter>" argument (with or
-// without accents) to a canonical filter key.
-func normalizeListFilter(filter string) string {
-	switch strings.ToLower(strings.TrimSpace(filter)) {
-	case "novas", "nova", "new":
-		return "novas"
-	case "dificeis", "difíceis", "dificil", "difícil":
-		return "dificeis"
-	default:
-		return ""
-	}
 }
 
 // fillQuizQuestions populates w.Quiz from the quiz_questions rows belonging to w.

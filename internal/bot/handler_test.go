@@ -50,6 +50,67 @@ func newTestHandler(t *testing.T) (*Handler, *recordingMessenger, *sqlite.Adapte
 	return handler, messenger, repo, user
 }
 
+func saveTestWord(t *testing.T, repo *sqlite.Adapter, userID int64, word string) *service.Word {
+	t.Helper()
+	w := &service.Word{
+		UserID: userID, Word: word, Translation: "tradução", GrammarClass: "noun",
+		ExampleEN: "Example in English", ExamplePT: "Exemplo em português",
+		Quiz: service.Quiz{
+			MultipleChoice:   service.QuizQuestion{Question: "Qual a tradução?", Correct: "tradução", Distractors: []string{"outra", "diferente"}},
+			CompleteSentence: service.QuizQuestion{Question: "Complete a frase", Correct: word},
+			Reverse:          service.QuizQuestion{Question: "Traduza para inglês", Correct: word},
+		},
+	}
+	if err := repo.Save(context.Background(), w); err != nil {
+		t.Fatal(err)
+	}
+	return w
+}
+
+func TestBilingualCommandsAndFilters(t *testing.T) {
+	handler, messenger, repo, user := newTestHandler(t)
+	ctx := context.Background()
+	saveTestWord(t, repo, user.ID, "resilient")
+	difficult := saveTestWord(t, repo, user.ID, "awkward")
+	if err := repo.UpdateAfterQuiz(ctx, difficult.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct{ portuguese, english string }{
+		{"/ajuda", "/HELP"},
+		{"/ajuda lista", "/help list"},
+		{"/lista", "/LIST"},
+		{"/lista novas", "/list\tNEW"},
+		{"/lista DIFÍCEIS", "/list\n difficult"},
+		{"/status", "/STATUS"},
+	} {
+		t.Run(test.english, func(t *testing.T) {
+			handler.HandleMessage(ctx, "chat", testPhone, test.portuguese)
+			want := messenger.last()
+			handler.HandleMessage(ctx, "chat", testPhone, test.english)
+			if got := messenger.last(); got != want {
+				t.Errorf("%s and %s differ:\n%s\n%s", test.portuguese, test.english, want, got)
+			}
+		})
+	}
+	for _, test := range []struct{ command, want, excluded string }{
+		{"/list new", "resilient", "awkward"},
+		{"/list difficult", "awkward", "resilient"},
+		{"/lista dificeis", "awkward", "resilient"},
+	} {
+		handler.HandleMessage(ctx, "chat", testPhone, test.command)
+		if got := messenger.last(); !strings.Contains(got, test.want) || strings.Contains(got, test.excluded) {
+			t.Errorf("%s returned incorrect words: %s", test.command, got)
+		}
+	}
+	handler.HandleMessage(ctx, "chat", testPhone, "/list typo")
+	if got := messenger.last(); !strings.Contains(got, "Não reconheci esse filtro") || strings.Contains(got, "resilient") {
+		t.Fatalf("unknown filter must give guidance, got %q", got)
+	}
+	if _, err := repo.ListByUser(ctx, user.ID, "typo"); err != service.ErrInvalidListFilter {
+		t.Fatalf("repository must reject unknown filters, got %v", err)
+	}
+}
+
 func TestHelpListsEveryCommand(t *testing.T) {
 	handler, messenger, _, _ := newTestHandler(t)
 	handler.HandleMessage(context.Background(), "chat", testPhone, "/ajuda")
