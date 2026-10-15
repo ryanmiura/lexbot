@@ -83,7 +83,7 @@ func (s *Server) handleMagicLink(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := s.tokens.ConsumeToken(r.Context(), token)
 	if errors.Is(err, service.ErrInvalidToken) {
-		s.renderLoginRequired(w, "Esse link é inválido, já foi usado ou expirou. Peça um novo com /dashboard no WhatsApp.")
+		s.renderLoginRequired(w, "Esse link é inválido, já foi usado ou expirou. Peça um novo com /vocabulario no WhatsApp.")
 		return
 	}
 	if err != nil {
@@ -101,7 +101,7 @@ func (s *Server) handleMagicLink(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	userID, err := s.sessions.UserID(r)
 	if err != nil {
-		s.renderLoginRequired(w, "Sua sessão expirou. Peça um novo link com /dashboard no WhatsApp.")
+		s.renderLoginRequired(w, "Sua sessão expirou. Peça um novo link com /vocabulario no WhatsApp.")
 		return
 	}
 
@@ -161,7 +161,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeleteWord(w http.ResponseWriter, r *http.Request) {
 	userID, err := s.sessions.UserID(r)
 	if err != nil {
-		s.renderLoginRequired(w, "Sua sessão expirou. Peça um novo link com /dashboard no WhatsApp.")
+		s.renderLoginRequired(w, "Sua sessão expirou. Peça um novo link com /vocabulario no WhatsApp.")
 		return
 	}
 
@@ -191,7 +191,7 @@ func (s *Server) handleDeleteWord(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePreferences(w http.ResponseWriter, r *http.Request) {
 	userID, err := s.sessions.UserID(r)
 	if err != nil {
-		s.renderLoginRequired(w, "Sua sessão expirou. Peça um novo link com /dashboard no WhatsApp.")
+		s.renderLoginRequired(w, "Sua sessão expirou. Peça um novo link com /vocabulario no WhatsApp.")
 		return
 	}
 
@@ -207,7 +207,7 @@ func (s *Server) handlePreferences(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	s.sessions.Clear(w)
-	s.renderLoginRequired(w, "Você saiu. Peça um novo link com /dashboard no WhatsApp quando quiser voltar.")
+	s.renderLoginRequired(w, "Você saiu. Peça um novo link com /vocabulario no WhatsApp quando quiser voltar.")
 }
 
 type dashboardPageData struct {

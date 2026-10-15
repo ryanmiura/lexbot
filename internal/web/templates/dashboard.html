@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LexBot — Dashboard</title>
+<title>LexBot — Meu vocabulário</title>
 <style>
   :root { color-scheme: light dark; }
   body {
@@ -13,7 +13,9 @@
     padding: 0 1.5rem;
     line-height: 1.5;
   }
-  h1 { font-size: 1.4rem; margin-bottom: 1rem; }
+  h1 { font-size: 1.4rem; margin-bottom: 0.35rem; }
+  h2 { font-size: 1.05rem; margin-top: 1.5rem; }
+  .intro { opacity: 0.8; margin-top: 0; }
   .stats { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.5rem; }
   .stat {
     background: rgba(127,127,127,0.12);
@@ -63,8 +65,10 @@
 </style>
 </head>
 <body>
-  <h1>📊 Seu progresso</h1>
+  <h1>📚 Meu vocabulário</h1>
+  <p class="intro">Gerencie suas palavras e expressões, acompanhe seu aprendizado e ajuste suas preferências.</p>
 
+  <h2>Seu progresso</h2>
   <div class="stats">
     <div class="stat"><div class="value">{{.Stats.Total}}</div><div class="label">palavras</div></div>
     <div class="stat"><div class="value">{{.Stats.New}}</div><div class="label">novas</div></div>
@@ -84,6 +88,7 @@
   </p>
   {{end}}
 
+  <h2>Preferências</h2>
   <form class="prefs" method="post" action="/dashboard/preferences">
     <label>
       <input type="checkbox" name="hints_enabled" {{if .HintsEnabled}}checked{{end}} onchange="this.form.submit()">
@@ -91,6 +96,7 @@
     </label>
   </form>
 
+  <h2>Palavras e expressões</h2>
   <form class="search" method="get" action="/dashboard">
     <input type="text" name="q" placeholder="Buscar palavra ou tradução..." value="{{.Query}}">
     <button type="submit">Buscar</button>

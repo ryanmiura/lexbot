@@ -11,6 +11,7 @@ LexBot é um bot de WhatsApp desenvolvido em Go que utiliza Inteligência Artifi
   * Frases de exemplo em inglês e português.
 * **Sistema de Quizzes:** Geração de perguntas a partir do vocabulário salvo do próprio usuário. Inclui formatos de múltipla escolha, completar frases e tradução reversa.
 * **Revisão Adaptativa:** O bot prioriza palavras no quiz baseando-se na taxa de erro do usuário e no tempo desde a última revisão.
+* **Meu vocabulário:** Interface web para gerenciar palavras e expressões, acompanhar o progresso e ajustar as dicas do quiz.
 
 ## Comandos
 
@@ -21,12 +22,14 @@ Envie `/ajuda` ou `/help` no WhatsApp para consultar todos os comandos e exemplo
   e `/lista dificeis` (`/list difficult`).
 * `/quiz`: inicia ou retoma uma revisão.
 * `/status`: mostra seu progresso e sua taxa de acerto.
-* `/dashboard`: abre o gerenciamento das palavras no navegador.
+* `/vocabulario` ou `/vocabulary`: abre **Meu vocabulário** no navegador, com um
+  link de uso único válido por 15 minutos. `/dashboard` continua funcionando.
 
 Comandos aceitam maiúsculas e minúsculas, e os filtros aceitam variações com ou
 sem acento (por exemplo, `difíceis` e `dificeis`). Filtros desconhecidos recebem
 orientação de uso. Os comandos em PT e EN têm o mesmo comportamento, com respostas
-em português.
+em português. `/vocabulário` também é aceito. As URLs existentes em `/dashboard`
+permanecem compatíveis.
 
 Para cadastrar vocabulário, envie uma palavra ou expressão em inglês por texto.
 Para cadastrar várias de uma vez, use uma por linha, até 10 por mensagem. Durante

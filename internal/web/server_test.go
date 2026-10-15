@@ -63,8 +63,8 @@ func TestDashboardRequiresSession(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("got status %d, want 200 (login-required page)", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "/dashboard") {
-		t.Errorf("expected the login-required page to mention the /dashboard command, got: %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "/vocabulario") {
+		t.Errorf("expected the login-required page to mention the /vocabulario command, got: %s", rec.Body.String())
 	}
 }
 
@@ -110,6 +110,9 @@ func TestMagicLinkFlow(t *testing.T) {
 	}
 	if !strings.Contains(rec2.Body.String(), "resilient") {
 		t.Errorf("expected the dashboard to list the user's word, got: %s", rec2.Body.String())
+	}
+	if !strings.Contains(rec2.Body.String(), "Meu vocabulário") {
+		t.Error("expected the vocabulary management title")
 	}
 
 	// Replaying the same magic link must fail — it's single-use.

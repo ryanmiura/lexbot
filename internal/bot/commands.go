@@ -51,9 +51,9 @@ func (h *Handler) commands() []commandDefinition {
 			},
 		},
 		{
-			names:       []string{"dashboard"},
-			description: "Abrir o gerenciamento das suas palavras no navegador.",
-			examples:    []string{"/dashboard"},
+			names:       []string{"vocabulario", "vocabulary", "dashboard"},
+			description: "Abrir Meu vocabulário para gerenciar palavras e expressões no navegador.",
+			examples:    []string{"/vocabulario", "/vocabulary"},
 			handle: func(ctx context.Context, chat string, user *service.User, _ string) {
 				h.dashboard.Handle(ctx, chat, user.ID)
 			},

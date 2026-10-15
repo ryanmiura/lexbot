@@ -30,7 +30,7 @@ func main() {
 		slog.Warn("GROQ_API_KEY is not set, AI features will not work")
 	}
 	if cfg.DashboardBaseURL == "" {
-		slog.Warn("DASHBOARD_BASE_URL is not set, /dashboard will not work")
+		slog.Warn("DASHBOARD_BASE_URL is not set, /vocabulario will not work")
 	}
 
 	// Initialize whatsmeow adapter
