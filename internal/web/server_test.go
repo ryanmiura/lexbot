@@ -98,6 +98,9 @@ func TestMagicLinkFlow(t *testing.T) {
 		t.Fatalf("expected a session cookie to be set, got %d cookies", len(cookies))
 	}
 	cookie := cookies[0]
+	if cookie.SameSite != http.SameSiteLaxMode || !cookie.Secure || !cookie.HttpOnly {
+		t.Fatalf("expected a secure session cookie allowed on top-level navigation, got %+v", cookie)
+	}
 
 	// Follow the redirect with the cookie: should see the dashboard, not the login page.
 	req2 := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
@@ -268,7 +271,8 @@ func TestLogoutClearsSession(t *testing.T) {
 		t.Fatalf("failed to upsert user: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/logout", nil)
+	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	req.AddCookie(sessionCookie(sessions, user.ID))
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
@@ -276,6 +280,28 @@ func TestLogoutClearsSession(t *testing.T) {
 	cookies := rec.Result().Cookies()
 	if len(cookies) != 1 || cookies[0].MaxAge >= 0 {
 		t.Fatalf("expected logout to clear the session cookie, got cookies=%+v", cookies)
+	}
+}
+
+func TestDashboardRejectsCrossOriginChanges(t *testing.T) {
+	srv, _, sessions := newTestServer(t)
+	for _, path := range []string{"/logout", "/dashboard/preferences", "/dashboard/words/1/delete"} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, path, nil)
+			req.Header.Set("Sec-Fetch-Site", "same-site")
+			req.AddCookie(sessionCookie(sessions, 1))
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("got status %d, want 403", rec.Code)
+			}
+		})
+	}
+
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/logout", nil))
+	if rec.Code != http.StatusMethodNotAllowed || rec.Header().Get("Set-Cookie") != "" {
+		t.Fatalf("GET /logout must not clear the session, got status %d", rec.Code)
 	}
 }
 

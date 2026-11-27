@@ -25,7 +25,7 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 // repositories the WhatsApp bot uses, so both surfaces stay consistent
 // automatically.
 type Server struct {
-	mux           *http.ServeMux
+	handler       http.Handler
 	sessions      *SessionManager
 	tokens        service.DashboardTokenRepository
 	words         service.WordRepository
@@ -36,7 +36,6 @@ type Server struct {
 
 func NewServer(sessions *SessionManager, tokens service.DashboardTokenRepository, words service.WordRepository, quiz service.QuizRepository, users service.UserRepository, whatsappPhone string) *Server {
 	s := &Server{
-		mux:           http.NewServeMux(),
 		sessions:      sessions,
 		tokens:        tokens,
 		words:         words,
@@ -44,21 +43,23 @@ func NewServer(sessions *SessionManager, tokens service.DashboardTokenRepository
 		users:         users,
 		whatsappPhone: whatsappPhone,
 	}
-	s.routes()
+	s.handler = http.NewCrossOriginProtection().Handler(s.routes())
 	return s
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.mux.ServeHTTP(w, r)
+	s.handler.ServeHTTP(w, r)
 }
 
-func (s *Server) routes() {
-	s.mux.HandleFunc("GET /{$}", s.handleLanding)
-	s.mux.HandleFunc("GET /dashboard/{token}", s.handleMagicLink)
-	s.mux.HandleFunc("GET /dashboard", s.handleDashboard)
-	s.mux.HandleFunc("POST /dashboard/words/{id}/delete", s.handleDeleteWord)
-	s.mux.HandleFunc("POST /dashboard/preferences", s.handlePreferences)
-	s.mux.HandleFunc("GET /logout", s.handleLogout)
+func (s *Server) routes() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", s.handleLanding)
+	mux.HandleFunc("GET /dashboard/{token}", s.handleMagicLink)
+	mux.HandleFunc("GET /dashboard", s.handleDashboard)
+	mux.HandleFunc("POST /dashboard/words/{id}/delete", s.handleDeleteWord)
+	mux.HandleFunc("POST /dashboard/preferences", s.handlePreferences)
+	mux.HandleFunc("POST /logout", s.handleLogout)
+	return mux
 }
 
 // handleLanding renders the public landing page at the site root, with a
