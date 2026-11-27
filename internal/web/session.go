@@ -14,6 +14,9 @@ import (
 
 const sessionCookieName = "lexbot_session"
 
+// Allow the top-level GET redirect after opening a link from WhatsApp.
+const sessionSameSite = http.SameSiteLaxMode
+
 // sessionTTL is how long a session cookie lasts once issued (after the
 // magic link is consumed), independent of the much shorter magic-link
 // token TTL — the link only needs to bootstrap this longer session.
@@ -49,7 +52,7 @@ func (m *SessionManager) Issue(w http.ResponseWriter, userID int64) {
 		Expires:  expires,
 		HttpOnly: true,
 		Secure:   true, // this dashboard is only ever served over HTTPS (via NPM)
-		SameSite: http.SameSiteStrictMode,
+		SameSite: sessionSameSite,
 	})
 }
 
@@ -62,7 +65,7 @@ func (m *SessionManager) Clear(w http.ResponseWriter) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: sessionSameSite,
 	})
 }
 
